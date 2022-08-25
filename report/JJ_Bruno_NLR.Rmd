@@ -1,0 +1,159 @@
+# Variables
+
+```{sh}
+BASEDIR="/media/mwschmid/myData/MWSchmid/JJ_Bruno"
+RESULTS="$BASEDIR/GitIgnore_results"
+HELPERS="$BASEDIR/GitIgnore_helpers"
+SCRIPTDIR="$BASEDIR/scripts"
+TEMPDIR="$HOME/tempJJB"
+TEMPDIR="/media/localData/tempJJB"
+mkdir -p $TEMPDIR
+```
+
+# Dependencies, see other Rmd
+
+**see other**
+
+# Reorganize files to get decent names
+
+**see other**
+
+# Remove short isoforms (note, this also removes perfect duplicates of different lengths)
+
+**see other (usearch version)**
+
+# Remove short peptides and merge all files
+
+**see other (LRR-RLK)**
+
+# Use PFAM to search for LRR and NB-ARC
+
+```{sh}
+hmmsearch --tblout $TEMPDIR/nbArc_candidates.hmm -E 1e-10 --cpu 30 $TEMPDIR/nbArc.hmm $TEMPDIR/allProts.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates.hmm -E 1e-3 --cpu 30 $CURHMM $TEMPDIR/allProts.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates.txt | sort | uniq > $TEMPDIR/allLRR_candidates.txt
+comm -12 $TEMPDIR/allLRR_candidates.txt $TEMPDIR/nbArc_candidates.txt | sort | uniq > $TEMPDIR/lrrAndNbArc_candidates.txt
+comm -23 $TEMPDIR/lrrAndNbArc_candidates.txt $TEMPDIR/pkinase_candidates.txt > $TEMPDIR/lrrAndNbArcNoKinase_candidates.txt
+wc -l $TEMPDIR/lrrAndNbArcNoKinase_candidates.txt
+# 42000
+fgrep "Athaliana" $TEMPDIR/lrrAndNbArc_candidates.txt | sort | uniq | wc -l # 111
+
+# just count nb
+wc -l $TEMPDIR/nbArc_candidates.txt
+wc -l $TEMPDIR/lrrAndNbArc_candidates.txt
+wc -l $TEMPDIR/lrrAndNbArcNoKinase_candidates.txt
+awk -F'_' '{print $1}' $TEMPDIR/nbArc_candidates.txt | sort | uniq -c | awk '{print $2","$1}' > $RESULTS/plainNbArcCounts.csv
+
+rm $TEMPDIR/*.fai
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/nbArc_candidates.txt > $TEMPDIR/nbArc_candidates.fasta
+awk '{print $0"|||"}' $TEMPDIR/nbArc_candidates.txt > $TEMPDIR/nbArc_candidates.withSep.txt
+fgrep -f $TEMPDIR/nbArc_candidates.withSep.txt $TEMPDIR/allMaps.txt > $RESULTS/nameTranslator.nbArc_candidates.txt
+wc -l $RESULTS/nameTranslator.nbArc_candidates.txt
+gzip -c $TEMPDIR/nbArc_candidates.fasta > $RESULTS/nbArc_candidates.fasta.gz
+
+# for NbArc only, check the shorter ones as well
+hmmsearch --tblout $TEMPDIR/nbArc_candidates_150.hmm -E 1e-10 --cpu 30 $TEMPDIR/nbArc.hmm $TEMPDIR/allProts_150.fasta
+perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/nbArc_candidates_150.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/nbArc_candidates_150.txt
+wc -l $TEMPDIR/nbArc_candidates.txt
+wc -l $TEMPDIR/nbArc_candidates_150.txt
+#92101 /media/localData/tempJJB/nbArc_candidates.txt
+#93928 /media/localData/tempJJB/nbArc_candidates_150.txt
+```
+
+# Use NCBI to get a taxonomic tree (more cleanup in the script at the end)
+
+**see other**
+
+# Extract NB-ARC Domain of NLRs
+
+```{sh}
+# extract candidates
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/lrrAndNbArcNoKinase_candidates.txt > $TEMPDIR/lrrAndNbArcNoKinase_candidates.fasta
+
+# domain search as above
+hmmsearch --domtblout $TEMPDIR/raw.domtblout -E 1e-10 --cpu 30 $TEMPDIR/nbArc.hmm $TEMPDIR/lrrAndNbArcNoKinase_candidates.fasta
+
+# extract position
+# NO filter criteria at least 200/260 of the reference need to be present)
+#cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "NB-ARC" && RefLen >= 0) print $1, $18, $19, $22}' > $TEMPDIR/nbArcPosition.bed
+cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "NB-ARC" && RefLen >= 0) print $1, $18, $19, $14}' > $TEMPDIR/nbArcPosition.bed
+
+# filter for highest score
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/nbArcPosition.bed > $TEMPDIR/uniqueNbArcPosition.bed
+gzip -c $TEMPDIR/uniqueNbArcPosition.bed > $RESULTS/uniqueNbArcPosition.bed.gz
+
+# extract NC-ARC domains
+bedtools getfasta -fi $TEMPDIR/lrrAndNbArcNoKinase_candidates.fasta -bed $TEMPDIR/uniqueNbArcPosition.bed > $TEMPDIR/nbArcDomainSequence.fasta
+fgrep ">" $TEMPDIR/nbArcDomainSequence.fasta | wc -l
+# 42000
+```
+
+# Extract NB-ARC Domain of NbArc only
+
+```{sh}
+# extract candidates
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/nbArc_candidates.txt > $TEMPDIR/nbArc_candidates.fasta
+samtools faidx $TEMPDIR/allProts_150.fasta -r $TEMPDIR/nbArc_candidates_150.txt > $TEMPDIR/nbArc_candidates_150.fasta
+
+# domain search as above
+hmmsearch --domtblout $TEMPDIR/raw.domtblout -E 1e-10 --cpu 30 $TEMPDIR/nbArc.hmm $TEMPDIR/nbArc_candidates.fasta
+hmmsearch --domtblout $TEMPDIR/raw_150.domtblout -E 1e-10 --cpu 30 $TEMPDIR/nbArc.hmm $TEMPDIR/nbArc_candidates_150.fasta
+
+# extract position
+# NO filter criteria at least 200/260 of the reference need to be present)
+#cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "NB-ARC" && RefLen >= 0) print $1, $18, $19, $22}' > $TEMPDIR/nbArcPosition.bed
+cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "NB-ARC" && RefLen >= 0) print $1, $18, $19, $14}' > $TEMPDIR/only_nbArcPosition.bed
+cat $TEMPDIR/raw_150.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "NB-ARC" && RefLen >= 0) print $1, $18, $19, $14}' > $TEMPDIR/only_nbArcPosition_150.bed
+
+# filter for highest score
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/only_nbArcPosition.bed > $TEMPDIR/only_uniqueNbArcPosition.bed
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/only_nbArcPosition_150.bed > $TEMPDIR/only_uniqueNbArcPosition_150.bed
+gzip -c $TEMPDIR/only_uniqueNbArcPosition.bed > $RESULTS/only_uniqueNbArcPosition.bed.gz
+gzip -c $TEMPDIR/only_uniqueNbArcPosition_150.bed > $RESULTS/only_uniqueNbArcPosition_150.bed.gz
+
+# extract NC-ARC domains
+bedtools getfasta -fi $TEMPDIR/nbArc_candidates.fasta -bed $TEMPDIR/only_uniqueNbArcPosition.bed > $TEMPDIR/only_nbArcDomainSequence.fasta
+bedtools getfasta -fi $TEMPDIR/nbArc_candidates_150.fasta -bed $TEMPDIR/only_uniqueNbArcPosition_150.bed > $TEMPDIR/only_nbArcDomainSequence_150.fasta
+fgrep ">" $TEMPDIR/only_nbArcDomainSequence.fasta | wc -l
+fgrep ">" $TEMPDIR/only_nbArcDomainSequence_150.fasta | wc -l
+#92101
+#93928
+```
+
+# Just count species
+
+```{sh}
+fgrep ">" $TEMPDIR/lrrAndNbArcNoKinase_candidates.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $TEMPDIR/lrrAndNbArc_candidates_per_species.csv
+cp $TEMPDIR/lrrAndNbArc_candidates_per_species.csv $RESULTS/
+gzip -c $TEMPDIR/lrrAndNbArcNoKinase_candidates.fasta > $RESULTS/fullSequences_NLR.fasta.gz
+
+fgrep ">" $TEMPDIR/nbArc_candidates.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $TEMPDIR/onlyNbArc_candidates_per_species.csv
+cp $TEMPDIR/onlyNbArc_candidates_per_species.csv $RESULTS/
+gzip -c $TEMPDIR/nbArc_candidates.fasta > $RESULTS/fullSequences_onlyNbArc.fasta.gz
+zcat $RESULTS/fullSequences_onlyNbArc.fasta.gz | fgrep ">" | wc -l 
+
+fgrep ">" $TEMPDIR/nbArc_candidates_150.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $TEMPDIR/onlyNbArc_candidates_150_per_species.csv
+cp $TEMPDIR/onlyNbArc_candidates_150_per_species.csv $RESULTS/
+gzip -c $TEMPDIR/nbArc_candidates_150.fasta > $RESULTS/fullSequences_onlyNbArc_150.fasta.gz
+zcat $RESULTS/fullSequences_onlyNbArc_150.fasta.gz | fgrep ">" | wc -l 
+```
+
+# Get ID to subgroup
+
+```{sh}
+zcat $RESULTS/fullSequences_onlyNbArc.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/NbArc.ids.txt
+zcat $RESULTS/fullSequences_onlyNbArc_150.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/NbArc_150.ids.txt
+```
+
+
+
+
+

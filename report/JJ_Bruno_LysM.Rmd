@@ -1,0 +1,119 @@
+# Variables
+
+```{sh}
+BASEDIR="/media/mwschmid/myData/MWSchmid/JJ_Bruno"
+RESULTS="$BASEDIR/GitIgnore_results"
+HELPERS="$BASEDIR/GitIgnore_helpers"
+SCRIPTDIR="$BASEDIR/scripts"
+TEMPDIR="$HOME/tempJJB"
+TEMPDIR="/media/localData/tempJJB"
+mkdir -p $TEMPDIR
+```
+
+# TMHMM
+
+**see other**
+
+# Dependencies, see other Rmd
+
+**see other**
+
+# Use NCBI to get a taxonomic tree (more cleanup in the script at the end)
+
+**see other**
+
+# Reorganize files to get decent names
+
+**see other**
+
+# Remove short isoforms (note, this also removes perfect duplicates of different lengths)
+
+**see other (usearch version)**
+
+# Search LysM
+
+```{sh}
+hmmsearch --tblout $TEMPDIR/LysM_candidates.hmm --max -E 1000 --incE 1000 --incdomE 1000 --cpu 30 $TEMPDIR/LysM.hmm $TEMPDIR/allProts.fasta
+perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/LysM_candidates.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/LysM_candidates.txt
+wc -l $TEMPDIR/LysM_candidates.txt
+samtools faidx -r $TEMPDIR/LysM_candidates.txt $TEMPDIR/allProts.fasta > $TEMPDIR/LysM_candidates.fasta
+
+hmmsearch --tblout $TEMPDIR/LysM_candidates_150.hmm --max -E 1000 --incE 1000 --incdomE 1000 --cpu 30 $TEMPDIR/LysM.hmm $TEMPDIR/allProts_150.fasta
+perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/LysM_candidates_150.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/LysM_candidates_150.txt
+wc -l $TEMPDIR/LysM_candidates_150.txt
+samtools faidx -r $TEMPDIR/LysM_candidates_150.txt $TEMPDIR/allProts_150.fasta > $TEMPDIR/LysM_candidates_150.fasta
+```
+
+# Search tm domain
+
+```{sh}
+export PATH="$PATH:$HOME/tmhmm-2.0c/bin"
+tmhmm $TEMPDIR/LysM_candidates.fasta > $TEMPDIR/tmhmm.res
+python $SCRIPTDIR/extractTMproteins.py 0 $TEMPDIR/tmhmm.res $TEMPDIR/LysM_candidates.fasta $TEMPDIR/LysM_candidatesWithTMD.fasta
+fgrep ">" $TEMPDIR/LysM_candidatesWithTMD.fasta | wc -l
+# 4717
+
+tmhmm $TEMPDIR/LysM_candidates_150.fasta > $TEMPDIR/tmhmm_150.res
+python $SCRIPTDIR/extractTMproteins.py 0 $TEMPDIR/tmhmm_150.res $TEMPDIR/LysM_candidates_150.fasta $TEMPDIR/LysM_candidates_150WithTMD.fasta
+fgrep ">" $TEMPDIR/LysM_candidates_150WithTMD.fasta | wc -l
+# 4816
+```
+
+# Intersect with kinase domain
+
+```{sh}
+fgrep ">" $TEMPDIR/LysM_candidatesWithTMD.fasta | sed 's/>//g' | sort | uniq > $TEMPDIR/LysM_candidatesWithTMD.txt
+fgrep ">" $TEMPDIR/LysM_candidates_150WithTMD.fasta | sed 's/>//g' | sort | uniq > $TEMPDIR/LysM_candidates_150WithTMD.txt
+
+comm -12 $TEMPDIR/pkinase_candidates.txt $TEMPDIR/LysM_candidatesWithTMD.txt > $TEMPDIR/LysM_candidatesWithTMDandKinase.txt
+comm -12 $TEMPDIR/pkinase_candidates.txt $TEMPDIR/LysM_candidates_150WithTMD.txt > $TEMPDIR/LysM_candidates_150WithTMDandKinase.txt
+comm -23 $TEMPDIR/LysM_candidatesWithTMD.txt $TEMPDIR/LysM_candidatesWithTMDandKinase.txt > $TEMPDIR/LysM_candidatesWithTMDnoKinase.txt
+comm -23 $TEMPDIR/LysM_candidates_150WithTMD.txt $TEMPDIR/LysM_candidates_150WithTMDandKinase.txt > $TEMPDIR/LysM_candidates_150WithTMDnoKinase.txt
+
+wc -l $TEMPDIR/LysM_candidatesWithTMDandKinase.txt
+wc -l $TEMPDIR/LysM_candidatesWithTMDnoKinase.txt
+wc -l $TEMPDIR/LysM_candidatesWithTMD.txt
+wc -l $TEMPDIR/LysM_candidates_150WithTMDandKinase.txt
+wc -l $TEMPDIR/LysM_candidates_150WithTMDnoKinase.txt
+wc -l $TEMPDIR/LysM_candidates_150WithTMD.txt
+
+# 3494 /media/localData/tempJJB/LysM_candidatesWithTMDandKinase.txt
+# 1223 /media/localData/tempJJB/LysM_candidatesWithTMDnoKinase.txt
+# 4717 /media/localData/tempJJB/LysM_candidatesWithTMD.txt
+# 3486 /media/localData/tempJJB/LysM_candidates_150WithTMDandKinase.txt
+# 1330 /media/localData/tempJJB/LysM_candidates_150WithTMDnoKinase.txt
+# 4816 /media/localData/tempJJB/LysM_candidates_150WithTMD.txt
+```
+
+# Get sequences and count species
+
+```{sh}
+samtools faidx -r $TEMPDIR/LysM_candidatesWithTMDandKinase.txt $TEMPDIR/allProts.fasta > $TEMPDIR/LysM_candidatesWithTMDandKinase.fasta
+samtools faidx -r $TEMPDIR/LysM_candidatesWithTMDnoKinase.txt $TEMPDIR/allProts.fasta > $TEMPDIR/LysM_candidatesWithTMDnoKinase.fasta
+samtools faidx -r $TEMPDIR/LysM_candidates_150WithTMDandKinase.txt $TEMPDIR/allProts.fasta > $TEMPDIR/LysM_candidates_150WithTMDandKinase.fasta
+samtools faidx -r $TEMPDIR/LysM_candidates_150WithTMDnoKinase.txt $TEMPDIR/allProts.fasta > $TEMPDIR/LysM_candidates_150WithTMDnoKinase.fasta
+gzip -c $TEMPDIR/LysM_candidatesWithTMDandKinase.fasta > $RESULTS/LysM_candidatesWithTMDandKinase.fasta.gz
+gzip -c $TEMPDIR/LysM_candidatesWithTMDnoKinase.fasta > $RESULTS/LysM_candidatesWithTMDnoKinase.fasta.gz
+gzip -c $TEMPDIR/LysM_candidates_150WithTMDandKinase.fasta > $RESULTS/LysM_candidates_150WithTMDandKinase.fasta.gz
+gzip -c $TEMPDIR/LysM_candidates_150WithTMDnoKinase.fasta > $RESULTS/LysM_candidates_150WithTMDnoKinase.fasta.gz
+
+fgrep ">" $TEMPDIR/LysM_candidatesWithTMDandKinase.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/LysM_RLK_candidates_per_species.csv
+fgrep ">" $TEMPDIR/LysM_candidatesWithTMDnoKinase.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/LysM_RLP_candidates_per_species.csv
+fgrep ">" $TEMPDIR/LysM_candidates_150WithTMDandKinase.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/LysM_RLK_candidates_150_per_species.csv
+fgrep ">" $TEMPDIR/LysM_candidates_150WithTMDnoKinase.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/LysM_RLP_candidates_150_per_species.csv
+```
+
+# Get ID to subgroup
+
+```{sh}
+zcat $RESULTS/LysM_candidatesWithTMDandKinase.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/LysM_withTMDandKinase.ids.txt
+zcat $RESULTS/LysM_candidatesWithTMDnoKinase.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/LysM_withTMDwithoutKinase.ids.txt
+zcat $RESULTS/LysM_candidates_150WithTMDandKinase.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/LysM_withTMDandKinase_150.ids.txt
+zcat $RESULTS/LysM_candidates_150WithTMDnoKinase.fasta.gz | fgrep ">" | sed 's/>//g' > $RESULTS/LysM_withTMDwithoutKinase_150.ids.txt
+```
+
+
+
+
+
+

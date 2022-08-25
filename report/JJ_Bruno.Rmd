@@ -1,0 +1,1091 @@
+# Variables
+
+```{sh}
+BASEDIR="/media/mwschmid/myData/MWSchmid/JJ_Bruno"
+RESULTS="$BASEDIR/GitIgnore_results"
+HELPERS="$BASEDIR/GitIgnore_helpers"
+TESTING="$BASEDIR/GitIgnore_testing"
+SCRIPTDIR="$BASEDIR/scripts"
+TEMPDIR="$HOME/tempJJB"
+TEMPDIR="/media/localData/tempJJB"
+mkdir -p $TEMPDIR
+```
+
+# Dependencies
+
+```{sh}
+# PFAM
+wget --quiet ftp://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam33.0/Pfam-A.hmm.gz -O $TEMPDIR/Pfam-A.hmm.gz
+gunzip $TEMPDIR/Pfam-A.hmm.gz
+hmmpress $TEMPDIR/Pfam-A.hmm
+
+#PF00931.23
+grep -B 2 -A 170 "ACC[[:space:]]*PF01476.21$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/LysM.hmm
+grep -B 1 -A 800 "NAME[[:space:]]*NB-ARC$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/nbArc.hmm
+grep -B 1 -A 900 "NAME[[:space:]]*Pkinase$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/pkinase.hmm
+#\|NAME[[:space:]]*LRRC37$\|NAME[[:space:]]*LRRC37AB_C$\|NAME[[:space:]]*LRR19-TM$
+#grep -B 1 -A 300 "NAME[[:space:]]*LRR_[[:digit:]]*$\|NAME[[:space:]]*LRRNT_[[:digit:]]*$\|NAME[[:space:]]*LRRCT$\|NAME[[:space:]]*LRRNT$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/pkinase.hmm
+
+for NUM in {1..12}; do
+if [ $NUM -eq 7 ]; then
+echo "not existing"
+continue
+fi
+grep -B 1 -A 300 "NAME[[:space:]]*LRR_$NUM$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/lrr_LRR$NUM.hmm
+done
+grep -B 1 -A 300 "NAME[[:space:]]*LRRNT_2*$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/lrr_LRRNT_2.hmm
+grep -B 1 -A 300 "NAME[[:space:]]*LRRCT$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/lrr_LRRCT.hmm
+grep -B 1 -A 300 "NAME[[:space:]]*LRRNT$" $TEMPDIR/Pfam-A.hmm | awk 'BEGIN{doPrint=1}{if (doPrint==1) {print $0}; if ($0=="//") {doPrint=0}; if ($0=="--") {doPrint=0}}' > $TEMPDIR/lrr_LRRNT.hmm
+tail $TEMPDIR/lrr_*
+
+# TrimAl
+git clone https://github.com/inab/trimal
+cd trimal/source; make; cd
+sudo cp $HOME/trimal/source/readal /usr/local/bin/
+sudo cp $HOME/trimal/source/trimal /usr/local/bin/
+sudo cp $HOME/trimal/source/statal /usr/local/bin/
+
+# ProtDist (part of phylip)
+#https://evolution.genetics.washington.edu/phylip/doc/protdist.html
+
+# FastME
+git clone https://gite.lirmm.fr/atgc/FastME
+cd FastME; ./configure; make; cd
+sudo cp $HOME/FastME/src/fastme /usr/local/bin/
+
+# FAMSA
+git clone https://github.com/refresh-bio/FAMSA
+cd FAMSA && make
+sudo mv famsa /usr/local/bin/
+
+# RAP Green
+git clone https://github.com/SouthGreenPlatform/rap-green.git
+cd rap-green
+javac rapgreen/*.java
+
+# install orthofinder
+wget https://github.com/davidemms/OrthoFinder/releases/download/2.5.4/OrthoFinder.tar.gz
+tar -xzf OrthoFinder.tar.gz
+
+# phytolrr
+export PATH="$PATH:$HOME/miniconda2/bin"
+conda create -n LRR python=3 
+source activate LRR
+pip install predict-phytolrr
+source deactivate
+
+# swiftOrtho
+git clone https://github.com/Rinoahu/SwiftOrtho
+cd SwiftOrtho
+bash ./install.sh
+#cd example
+#bash ./run.sh
+
+# install diamond
+#wget http://github.com/bbuchfink/diamond/releases/download/v2.0.13/diamond-linux64.tar.gz
+#tar xzf diamond-linux64.tar.gz
+```
+
+# TAKE THE CLASSIFICATION FROM ARABIDOPSIS
+
+```{sh}
+#grep "AT[[:alpha:]]G" $HELPERS/2009_LehtiShiu_plantPhys_SI/134353Supplemental_Table_S4.csv
+grep "AT[[:digit:]]G" $HELPERS/beforeRevision/2009_LehtiShiu_plantPhys_SI/134353Supplemental_Table_S4.csv | grep "LRR-\|LRR_" | sed 's/Arath6|//g' | sed 's/AT3G56100.1/AT3G56100.2/g' > $HELPERS/At_LRRRLKs.csv
+wget ftp://ftp.ensemblgenomes.org/pub/plants/release-50/fasta/arabidopsis_thaliana/pep/Arabidopsis_thaliana.TAIR10.pep.all.fa.gz -O $TEMPDIR/athal_AA.fa.gz
+zcat $TEMPDIR/athal_AA.fa.gz | awk '{print $1}' > $TEMPDIR/athal.AA.fa
+rm $TEMPDIR/athal.AA.fa.fai
+samtools faidx $TEMPDIR/athal.AA.fa
+awk -v tempo=$TEMPDIR -F',' '{print $1 > tempo"/at_sg_"$2".txt"}' $HELPERS/At_LRRRLKs.csv
+
+for CURFILE in $TEMPDIR/at_sg_*.txt; do
+PREFIX=$(basename $CURFILE .txt)
+samtools faidx $TEMPDIR/athal.AA.fa -r $CURFILE > $TEMPDIR/$PREFIX.fasta
+done
+
+cp $TEMPDIR/at_sg_*.fasta $HELPERS/
+
+for CURFILE in $TEMPDIR/at_sg_*.fasta; do
+PREFIX=$(basename $CURFILE .fasta)
+cat $CURFILE | sed "s/>/>${PREFIX}__/g"
+done > $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta
+cp $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta $HELPERS/
+
+# Check if all of them have LRR+KD
+hmmsearch --tblout $TEMPDIR/pkinase_candidates_arabidopsis.hmm -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates_arabidopsis.hmm -E 1e-5 --cpu 30 $CURHMM $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates_arabidopsis.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates_arabidopsis.txt | sort | uniq > $TEMPDIR/allLRR_candidates_arabidopsis.txt
+comm -12 $TEMPDIR/allLRR_candidates_arabidopsis.txt $TEMPDIR/pkinase_candidates_arabidopsis.txt > $TEMPDIR/lrrAndPkinase_candidates_arabidopsis.txt
+wc -l $TEMPDIR/lrrAndPkinase_candidates_arabidopsis.txt
+fgrep ">" $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta | sed 's/>//g' > $TEMPDIR/originalArabidopsisCandidates.txt
+comm -3 $TEMPDIR/originalArabidopsisCandidates.txt $TEMPDIR/lrrAndPkinase_candidates_arabidopsis.txt > $TEMPDIR/arabidopsisWithoutBothDomains.txt
+wc -l $TEMPDIR/arabidopsisWithoutBothDomains.txt
+samtools faidx $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta -r $TEMPDIR/lrrAndPkinase_candidates_arabidopsis.txt > $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta
+cp $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta $RESULTS/
+cp $TEMPDIR/arabidopsisWithoutBothDomains.txt $RESULTS/
+
+# phyto LRR
+export PATH="$PATH:$HOME/miniconda2/bin"
+python2 $SCRIPTDIR/replaceXwithG.py $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta $TEMPDIR/ArabidopsisWithSubgroupPrefixGinsteadOfX.fasta $TEMPDIR/changedResidues.txt
+source activate LRR
+predict-phytolrr -f $TEMPDIR/ArabidopsisWithSubgroupPrefixGinsteadOfX.fasta > $TEMPDIR/lrrPredictionForFilter.txt
+python2 $SCRIPTDIR/lrrPredToBed.py $TEMPDIR/lrrPredictionForFilter.txt > $TEMPDIR/lrrPredictionForFilterWithReplace.bed
+python2 $SCRIPTDIR/revertSequences.py $TEMPDIR/lrrPredictionForFilterWithReplace.bed $TEMPDIR/changedResidues.txt > $TEMPDIR/lrrPredictionForFilter.bed
+source deactivate
+
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter.bed | uniq | wc -l
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter.bed | uniq -c
+
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter.bed | sort | uniq > $TEMPDIR/allLRR_candidates_arabidopsis_phytoLRR.txt
+comm -12 $TEMPDIR/allLRR_candidates_arabidopsis_phytoLRR.txt $TEMPDIR/pkinase_candidates_arabidopsis.txt > $TEMPDIR/lrrAndPkinase_candidates_arabidopsis_phytoLRR.txt
+wc -l $TEMPDIR/lrrAndPkinase_candidates_arabidopsis.txt
+wc -l $TEMPDIR/lrrAndPkinase_candidates_arabidopsis_phytoLRR.txt
+fgrep ">" $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta | sed 's/>//g' > $TEMPDIR/originalArabidopsisCandidates.txt
+comm -3 $TEMPDIR/originalArabidopsisCandidates.txt $TEMPDIR/lrrAndPkinase_candidates_arabidopsis_phytoLRR.txt > $TEMPDIR/arabidopsisWithoutBothDomains_phytoLRR.txt
+wc -l $TEMPDIR/arabidopsisWithoutBothDomains_phytoLRR.txt
+samtools faidx $TEMPDIR/ArabidopsisWithSubgroupPrefix.fasta -r $TEMPDIR/lrrAndPkinase_candidates_arabidopsis_phytoLRR.txt > $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains_phytoLRR.fasta
+cp $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains_phytoLRR.fasta $RESULTS/
+cp $TEMPDIR/arabidopsisWithoutBothDomains_phytoLRR.txt $RESULTS/
+```
+
+# Reformat some fasta
+
+```{sh}
+zcat $HELPERS/NewGenomesUgly/Cdemersum/56572-CDS-prot.fasta.gz | sed 's/||/\t/g'| awk -F"\t" '{if(substr($0,1,1)==">") {print ">"$5} else {print $0}}' | gzip > $HELPERS/NewGenomesUgly/Cdemersum/clean.prot.fasta.gz
+zcat $HELPERS/NewGenomesUgly/Eferox/56574-CDS-prot.fasta.gz | sed 's/||/\t/g'| awk -F"\t" '{if(substr($0,1,1)==">") {print ">"$5} else {print $0}}' | gzip > $HELPERS/NewGenomesUgly/Eferox/clean.prot.fasta.gz
+zcat $HELPERS/NewGenomesUgly/Lminor/27408-CDS-prot.fasta.gz | sed 's/||/\t/g'| awk -F"\t" '{if(substr($0,1,1)==">") {print ">"$5} else {print $0}}' | gzip > $HELPERS/NewGenomesUgly/Lminor/clean.prot.fasta.gz
+zcat $HELPERS/NewGenomesUgly/Pamericana/29305-CDS-prot.fasta.gz | sed 's/||/\t/g'| awk -F"\t" '{if(substr($0,1,1)==">") {print ">"$5} else {print $0}}' | gzip > $HELPERS/NewGenomesUgly/Pamericana/clean.prot.fasta.gz
+```
+
+# Reorganize files and get primary proteins only
+
+```{r}
+myData <- read.csv("/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_helpers/forFileMoveFirstRound.csv", header = TRUE, stringsAsFactors = FALSE)
+myData$Species <- trimws(myData$Species)
+myData$SpeciesShort <- sapply(myData$Species, function(x) {temp <- unlist(strsplit(x, ' '))[1:2]; out <- paste0(substr(temp[1],1,1), temp[2])})
+myData$SpeciesShort[myData$Species=="Cannabis sativa"] <- "Cannabissativa"
+sort(table(myData$SpeciesShort), decreasing = TRUE)[1:3]
+myData$Gff <- sapply(myData$Fasta, function(x) unlist(strsplit(x, '_'))[1])
+write.table(myData[,c("SpeciesShort", "Fasta", "Gff")], "/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_helpers/forFileMoveFirstRoundTidy.csv", col.names = FALSE, row.names = FALSE, sep = ',', quote = FALSE)
+```
+```{sh}
+for CURFOLDER in $HELPERS/NewGenomesUgly/*; do
+PREFIX=$(basename $CURFOLDER)
+GFFFILE=$CURFOLDER/*gff*
+GFFFILENAME=$(basename $GFFFILE)
+FASTAFILENAME=$(ls -lhrt $CURFOLDER | awk '{if (length($9)>1) {print $9}}' | fgrep -v "$GFFFILENAME")
+FASTAFILE=$CURFOLDER/$FASTAFILENAME
+echo "$PREFIX,$FASTAFILENAME,$GFFFILENAME"
+done | sed 's/.gz//g' > $HELPERS/forFileMoveSecondRoundTidy.csv
+```
+```{sh}
+# for primary sequences from phytozome just remove everything up to identifier here
+for CURFILE in $HELPERS/SequencesFromPhytozome/*.fa.gz; do
+FILENAME=$(basename $CURFILE)
+PREFIX=${FILENAME//_*}
+zcat $CURFILE | awk '{print $1}' | gzip > $HELPERS/PrimarySequencesOnly/$PREFIX.fasta.gz
+done
+
+# take primary sequences from GFF
+cat $HELPERS/forFileMoveFirstRoundTidy.csv | while read LINE; do
+IFS=',' read -ra CURARR <<< "$LINE"
+SIMPLE=${CURARR[0]}
+FASTAPREFIX=${CURARR[1]}
+GFFPREFIX=${CURARR[2]}
+if [ -f "$HELPERS/PrimarySequencesOnly/$SIMPLE.fasta.gz" ]; then
+echo "skipping $SIMPLE"
+else
+python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/$FASTAPREFIX* $HELPERS/AnnotationFiles/$GFFPREFIX* $HELPERS/PrimarySequencesOnly/$SIMPLE.fasta.gz
+fi
+done 2> $TEMPDIR/firstRoundAdd.log
+cp $TEMPDIR/firstRound.log $HELPERS/
+cp $TEMPDIR/firstRoundAdd.log $HELPERS/
+
+cat $HELPERS/forFileMoveSecondRoundTidy.csv | while read LINE; do
+IFS=',' read -ra CURARR <<< "$LINE"
+SIMPLE=${CURARR[0]}
+FASTAPREFIX=${CURARR[1]}
+GFFPREFIX=${CURARR[2]}
+if [ -f "$HELPERS/PrimarySequencesOnly/$SIMPLE.fasta.gz" ]; then
+echo "skipping $SIMPLE"
+else
+python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/$SIMPLE/$FASTAPREFIX.gz $HELPERS/NewGenomesUgly/$SIMPLE/$GFFPREFIX.gz $HELPERS/PrimarySequencesOnly/$SIMPLE.fasta.gz
+fi
+done 2> $TEMPDIR/secondRoundAdd.log
+cp $TEMPDIR/secondRound.log $HELPERS/
+cp $TEMPDIR/secondRoundAdd.log $HELPERS/
+
+# check again this here
+echo "species,afterFilter,beforeFilter" > $TEMPDIR/simplifierSummary.csv
+cat $HELPERS/firstRound.log $HELPERS/secondRound.log | fgrep "media" | sed 's+/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_helpers/PrimarySequencesOnly/++g' | sed 's/.fasta.gz: wrote /,/g' | sed 's/ sequences.*(total in file: /,/g' | sed 's/)//g' | sed 's/.fasta.gz: using all //g' | sort >> $TEMPDIR/simplifierSummary.csv
+cp $TEMPDIR/simplifierSummary.csv $HELPERS/
+awk -F',' '{if(NR>1){AFTERSUM+=$2; TOTSUM+=$3}}END{print AFTERSUM,TOTSUM,AFTERSUM/TOTSUM*100}' $TEMPDIR/simplifierSummary.csv
+# 12508493 15815035 79.0924 % surviving
+wc -l $TEMPDIR/simplifierSummary.csv
+# 338, not all species are in because some were manually taken
+
+# has a bit too many (1800) surplus, but the overall reduction is ok
+#/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_helpers/PrimarySequencesOnly/Atauschii.fasta.gz: wrote 41454 sequences but found 39630 primary sequences in GFF, difference: 1824 (total in file: 258680)
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Aegilops_tauschii.Aet_v4.0.pep.all* $HELPERS/AnnotationFiles/Aegilops* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Aegilops_tauschii.Aet_v4.0.pep.all* | head
+#zcat $HELPERS/AnnotationFiles/Aegilops* | grep -v "^#" | head
+
+# that's sorted wrongly but it just takes shorter seqs: Afiliculoides
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Azolla_filiculoides.protein.highconfidence_v1.1* $HELPERS/AnnotationFiles/Azolla* $TEMPDIR/testFile.fasta
+
+# still has tons (no primary selection)
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Bnapus_AST_PRJEB5043_v1.pep.all* $HELPERS/AnnotationFiles/Bnapus* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Bnapus_AST_PRJEB5043_v1.pep.all* | head
+#zcat $HELPERS/AnnotationFiles/Bnapus* | grep -v "^#" | head -n 50
+
+# no sequences matching, also a problem with the supercontig numbering, not so problematic here
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Cpapaya_113_ASGPBv0.4.protein* $HELPERS/AnnotationFiles/Cpapaya* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Cpapaya_113_ASGPBv0.4.protein* | head
+#zcat $HELPERS/AnnotationFiles/Cpapaya* | grep -v "^#" | head -n 50
+#zcat $HELPERS/AnnotationFiles/Cpapaya* | grep -v "^#" | fgrep evm.model.supercontig_0.1
+
+# error (without genes), working now
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Cfollicularis_v3.pep* $HELPERS/AnnotationFiles/Cfollicularis* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Cfollicularis_v3.pep* | head
+#zcat $HELPERS/AnnotationFiles/Cfollicularis* | grep -v "^#" | head -n 50
+
+# no selection, maybe ok
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Bhygrometrica* $HELPERS/AnnotationFiles/Bhygrometrica* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Bhygrometrica* | head
+#zcat $HELPERS/AnnotationFiles/Bhygrometrica* | grep -v "^#" | head -n 50
+
+# names don't match, gff and fasta did not match
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Nbenthamiana* $HELPERS/AnnotationFiles/Nbenthamiana* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Nbenthamiana* | head
+#zcat $HELPERS/AnnotationFiles/Nbenthamiana* | grep -v "^#" | head -n 50
+
+# Cbraunii, Better now (103 missing)
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Chabra1* $HELPERS/AnnotationFiles/Chabra1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Chabra1* | head
+#zcat $HELPERS/AnnotationFiles/Chabra1* | grep -v "^#" | head -n 50
+
+# Ceustigma solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Chleu1* $HELPERS/AnnotationFiles/Chleu1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Chleu1* | head
+#zcat $HELPERS/AnnotationFiles/Chleu1* | grep -v "^#" | head -n 50
+
+# Cincerta, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Chlin1* $HELPERS/AnnotationFiles/Chlin1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Chlin1* | head
+#zcat $HELPERS/AnnotationFiles/Chlin1* | grep -v "^#" | head -n 50
+
+# Cschloesseri
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Chlsc1* $HELPERS/AnnotationFiles/Chlsc1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Chlsc1* | head
+#zcat $HELPERS/AnnotationFiles/Chlsc1* | grep -v "^#" | head -n 50
+
+# Cparadoxa, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Cyapar1* $HELPERS/AnnotationFiles/Cyapar1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Cyapar1* | head
+#zcat $HELPERS/AnnotationFiles/Cyapar1* | grep -v "^#" | head -n 50
+
+# Gphlegrea, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Galph1* $HELPERS/AnnotationFiles/Galph1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Galph1* | head
+#zcat $HELPERS/AnnotationFiles/Galph1* | grep -v "^#" | head -n 50
+
+# Knitens, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Klenit1* $HELPERS/AnnotationFiles/Klenit1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Klenit1* | head
+#zcat $HELPERS/AnnotationFiles/Klenit1* | grep -v "^#" | head -n 50
+
+# Mviride, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Mesovir1* $HELPERS/AnnotationFiles/Mesovir1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Mesovir1* | head
+#zcat $HELPERS/AnnotationFiles/Mesovir1* | grep -v "^#" | head -n 50
+
+# Mendlicherianum, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Mesen1* $HELPERS/AnnotationFiles/Mesen1* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Mesen1* | head
+#zcat $HELPERS/AnnotationFiles/Mesen1* | grep -v "^#" | head -n 50
+
+# Macuminata, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Macuminata* $HELPERS/AnnotationFiles/Macuminata* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Macuminata* | head
+#zcat $HELPERS/AnnotationFiles/Macuminata* | grep -v "^#" | head -n 50
+
+# Otauri, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Ostta1115* $HELPERS/AnnotationFiles/Ostta1115* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Ostta1115* | head
+#zcat $HELPERS/AnnotationFiles/Ostta1115* | grep -v "^#" | head -n 50
+
+# Sgrosvenorii, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Sgrosvenorii* $HELPERS/AnnotationFiles/Sgrosvenorii* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Sgrosvenorii* | head
+#zcat $HELPERS/AnnotationFiles/Sgrosvenorii* | grep -v "^#" | head -n 50
+
+# Stuberosum, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Stuberosum* $HELPERS/AnnotationFiles/Stuberosum* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Stuberosum* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Stuberosum* | grep -v "^#" | head -n 50
+
+# Smuscicola, names don't match - took the primary proteins only
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Smuscicola* $HELPERS/AnnotationFiles/Smuscicola* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Smuscicola* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Smuscicola* | grep -v "^#" | head -n 50
+
+# Saralocaspica, names don't match and there's no gene gff, treat as primary only
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Saralocaspica* $HELPERS/AnnotationFiles/Saralocaspica* $TEMPDIR/testFile.fasta
+#zcat $HELPERS/SequenceFiles/Saralocaspica* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Saralocaspica* | grep -v "^#" | head -n 50
+
+# Pmargaritaceum, some are not there, like pm000030.t1, treat all as primary
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Penium* $HELPERS/AnnotationFiles/Penium* $TEMPDIR/testFile.fasta
+#ls $HELPERS/SequenceFiles/Penium* $HELPERS/AnnotationFiles/Penium*
+#zcat $HELPERS/SequenceFiles/Penium* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Penium* | grep -v "^#" | head -n 50
+#zcat $HELPERS/AnnotationFiles/Penium* | grep -v "^#" | fgrep pm000030.t1
+#zcat $HELPERS/SequenceFiles/Penium* | fgrep -A 10 pm000030.t1
+
+# Mpusilla, treat all as primary
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Mpusilla* $HELPERS/AnnotationFiles/Mpusilla* $TEMPDIR/testFile.fasta
+#ls $HELPERS/SequenceFiles/Mpusilla* $HELPERS/AnnotationFiles/Mpusilla*
+#zcat $HELPERS/SequenceFiles/Mpusilla* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Mpusilla* | grep -v "^#" | head -n 50
+#zcat $HELPERS/AnnotationFiles/Mpusilla* | grep -v "^#" | fgrep 134968
+#zcat $HELPERS/SequenceFiles/Mpusilla* | fgrep -A 10 134968
+
+# Ptrichocarpa, some are not there, use transcript (like Stuberosum)
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Ptrichocarpa* $HELPERS/AnnotationFiles/Ptrichocarpa* $TEMPDIR/testFile.fasta
+#ls $HELPERS/SequenceFiles/Ptrichocarpa* $HELPERS/AnnotationFiles/Ptrichocarpa*
+#zcat $HELPERS/SequenceFiles/Ptrichocarpa* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Ptrichocarpa* | grep -v "^#" | head -n 50
+#zcat $HELPERS/AnnotationFiles/Ptrichocarpa* | grep -v "^#" | fgrep Potri.018G149650.1
+#zcat $HELPERS/SequenceFiles/Ptrichocarpa* | fgrep -A 10 Potri.018G149650.1
+
+# Slycopersicum, some are not there, use transcript (like Stuberosum), still doesn't work. some are missing, treat as primary only
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/SequenceFiles/Slycopersicum* $HELPERS/AnnotationFiles/Slycopersicum* $TEMPDIR/testFile.fasta
+#ls $HELPERS/SequenceFiles/Slycopersicum* $HELPERS/AnnotationFiles/Slycopersicum*
+#zcat $HELPERS/SequenceFiles/Slycopersicum* | fgrep ">" | head -n 80
+#zcat $HELPERS/AnnotationFiles/Slycopersicum* | grep -v "^#" | head -n 50
+#zcat $HELPERS/AnnotationFiles/Slycopersicum* | grep -v "^#" | fgrep Solyc06g034080.3.1
+#zcat $HELPERS/SequenceFiles/Slycopersicum* | fgrep -A 10 Solyc06g034080.3.1
+
+#cat $HELPERS/forFileMoveFirstRoundTidy.csv | while read LINE; do
+#IFS=',' read -ra CURARR <<< "$LINE"
+#SIMPLE=${CURARR[0]}
+#FASTAPREFIX=${CURARR[1]}
+#GFFPREFIX=${CURARR[2]}
+#echo "$SIMPLE"
+#zcat $HELPERS/SequenceFiles/$FASTAPREFIX* | fgrep "transcript=" | wc -l
+#done
+
+# Pguajava fail, totally messed up sorting, but all unique anyway
+
+# Gbiloba	Ginkgo_biloba.HiC.protein.fasta	Ginkgo_biloba.HiC.genes.gff3, solved, gff line check < 30 instead of 50
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Gbiloba/Ginkgo_biloba.HiC.protein.fasta.gz $HELPERS/NewGenomesUgly/Gbiloba/Ginkgo_biloba.HiC.genes.gff3.gz $HELPERS/PrimarySequencesOnly/Gbiloba.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Gbiloba/Ginkgo_biloba.HiC.protein.fasta.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Gbiloba/Ginkgo_biloba.HiC.genes.gff3.gz | head
+
+#Smelongena, was the wrong GFF (repeats instead of genes)
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Smelongena/Eggplant_V4.1_protein.function.fa.gz $HELPERS/NewGenomesUgly/Smelongena/Eggplant_V4.1_function_IPR_final.gff.gz $HELPERS/PrimarySequencesOnly/Smelongena.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Smelongena/Eggplant_V4.1_protein.function.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Smelongena/Eggplant_V4.1_function_IPR_final.gff.gz | head
+
+#Sspontaneumhybrid		sugarcane.gff3
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Sspontaneumhybrid/sugarcane_protein.faa.gz $HELPERS/NewGenomesUgly/Sspontaneumhybrid/sugarcane.gff3.gz $HELPERS/PrimarySequencesOnly/Sspontaneumhybrid.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Sspontaneumhybrid/sugarcane_protein.faa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Sspontaneumhybrid/sugarcane.gff3.gz | head
+
+# Pginseng really no match
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Pginseng/Ginseng_proteins_v1.fasta.gz $HELPERS/NewGenomesUgly/Pginseng/Ginseng_annotation_v1.noSeqs.gff.gz $HELPERS/PrimarySequencesOnly/Pginseng.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Pginseng/Ginseng_proteins_v1.fasta.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Pginseng/Ginseng_annotation_v1.noSeqs.gff.gz | head
+
+# Aalba, P instead of T, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Aalba/Abal.1_1.pep.fa.gz $HELPERS/NewGenomesUgly/Aalba/Abal.1_1.gff.gz $HELPERS/PrimarySequencesOnly/Aalba.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Aalba/Abal.1_1.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Aalba/Abal.1_1.gff.gz | grep -v "^#" | head
+
+# AmajusL, had some suffix, solved
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/AmajusL/snapdragon_IGDBV1.pros.fasta.gz $HELPERS/NewGenomesUgly/AmajusL/snapdragon_IGDBV1.chr.gene.gff.gz $HELPERS/PrimarySequencesOnly/AmajusL.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/AmajusL/snapdragon_IGDBV1.pros.fasta.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/AmajusL/snapdragon_IGDBV1.chr.gene.gff.gz | grep -v "^#" | head
+
+# Cmicranthum, is ok, the gff has more than the fasta
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Cmicranthum/protein.faa.gz $HELPERS/NewGenomesUgly/Cmicranthum/genomic.gff.gz $HELPERS/PrimarySequencesOnly/Cmicranthum.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Cmicranthum/protein.faa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Cmicranthum/genomic.gff.gz | grep -v "^#" | head
+	
+# Dexilis, is ok, the gff has more than the fasta
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Dexilis/protein.faa.gz $HELPERS/NewGenomesUgly/Dexilis/genomic.gff.gz $HELPERS/PrimarySequencesOnly/Dexilis.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Dexilis/protein.faa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Dexilis/genomic.gff.gz | grep -v "^#" | head
+
+# Vrotundifolia, protein_id in gff
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Vrotundifolia/VITMroTrayshed_v2.0.protein.fasta.gz $HELPERS/NewGenomesUgly/Vrotundifolia/VITMroTrayshed_v2.0.gff3.gz $HELPERS/PrimarySequencesOnly/Vrotundifolia.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Vrotundifolia/VITMroTrayshed_v2.0.protein.fasta.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Vrotundifolia/VITMroTrayshed_v2.0.gff3.gz | grep -v "^#" | head
+
+# Pabies there are still some with 0 sequences, has no transcript entries... wtf! check for outfilenames and do an if there?
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Pabies/Paab.1_0b.pep.fa.gz $HELPERS/NewGenomesUgly/Pabies/Paab.1_0b.gff.gz $HELPERS/PrimarySequencesOnly/Pabies.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Pabies/Paab.1_0b.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Pabies/Paab.1_0b.gff.gz | grep -v "^#" | head
+
+# Pjaponicum also no transcript entries
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Pjaponicum/protein.faa.gz $HELPERS/NewGenomesUgly/Pjaponicum/genomic.gff.gz $HELPERS/PrimarySequencesOnly/Pjaponicum.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Pjaponicum/protein.faa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Pjaponicum/genomic.gff.gz | grep -v "^#" | head
+
+# Plambertiana also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Plambertiana/Pila.1_5.pep.fa.gz $HELPERS/NewGenomesUgly/Plambertiana/Pila.1_5.gff.gz $HELPERS/PrimarySequencesOnly/Plambertiana.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Plambertiana/Pila.1_5.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Plambertiana/Pila.1_5.gff.gz | grep -v "^#" | head
+
+# Plambertiana also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Pmenziesii/Psme.1_0.pep.fa.gz $HELPERS/NewGenomesUgly/Pmenziesii/Psme.1_0.gff.gz $HELPERS/PrimarySequencesOnly/Pmenziesii.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Pmenziesii/Psme.1_0.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Pmenziesii/Psme.1_0.gff.gz | grep -v "^#" | head
+
+# Ptaeda also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Ptaeda/Pita.2_01.pep.fa.gz $HELPERS/NewGenomesUgly/Ptaeda/Pita.2_01.gff.gz $HELPERS/PrimarySequencesOnly/Ptaeda.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Ptaeda/Pita.2_01.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Ptaeda/Pita.2_01.gff.gz | grep -v "^#" | head
+	
+# Sgiganteum also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Sgiganteum/Segi.2_0.pep.fa.gz $HELPERS/NewGenomesUgly/Sgiganteum/Segi.2_0.gff.gz $HELPERS/PrimarySequencesOnly/Sgiganteum.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Sgiganteum/Segi.2_0.pep.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Sgiganteum/Segi.2_0.gff.gz | grep -v "^#" | head
+	
+# Spimpinellifolium also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Spimpinellifolium/SPI_r1.1.pep.fasta.gz $HELPERS/NewGenomesUgly/Spimpinellifolium/SPI_r1.1.pmol.gene.gff.gz $HELPERS/PrimarySequencesOnly/Spimpinellifolium.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Spimpinellifolium/SPI_r1.1.pep.fasta.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Spimpinellifolium/SPI_r1.1.pmol.gene.gff.gz | grep -v "^#" | head
+	
+# Spimpinellifolium also no transcript entries	
+#python $SCRIPTDIR/getLongestProteinFromGFF.py $HELPERS/NewGenomesUgly/Ssempervirens/SESE.2_1.peptides.fa.gz $HELPERS/NewGenomesUgly/Ssempervirens/SESE.2_1.gff.gz $HELPERS/PrimarySequencesOnly/Ssempervirens.fasta.gz
+#zcat $HELPERS/NewGenomesUgly/Ssempervirens/SESE.2_1.peptides.fa.gz | fgrep ">" | head
+#zcat $HELPERS/NewGenomesUgly/Ssempervirens/SESE.2_1.gff.gz | grep -v "^#" | head
+```
+
+Notes:
+  * Smuscicola, names don't match - took the primary proteins only
+  * Saralocaspica, names don't match and there's no gene gff, treat as primary only (the gff is lncRNA)
+  * Pmargaritaceum, some names are missing (like pm000030.t1), are those TEs? No, one was a kinase, treat as primary
+  * Smuscicola, names don't match - few genes, treat all as primary
+  * Sspontaneum is ok, all remain as primary
+  * Turartu is ok, all remain as primary
+  * Tspelta is ok, all remain as primary
+  * Pavium is ok, all remain as primary
+  * Pginseng, names don't match at all, just use all?
+  * Pguajava, very messed up sorting, but n==gene==mRNA (moved to primary manually)
+  * Cmicranthum, ok, GFF has more than the fasta
+  * Dexilis, ok, GFF has more than the fasta
+  * Mbalbisiana, ok, GFF has more than the fasta
+
+# Simplify proteins
+
+```{sh}
+for CURFILE in $HELPERS/PrimarySequencesOnly/*.fasta.gz; do
+SPECIES=$(basename $CURFILE .fasta.gz)
+python $SCRIPTDIR/simplifyProteinNames.py ${SPECIES}_ $CURFILE ${CURFILE//.fasta.gz}.simple.fasta.gz ${CURFILE//.fasta.gz}.map.gz
+done
+
+# check names, they are not unique
+zcat $HELPERS/PrimarySequencesOnly/*.map.gz  > $TEMPDIR/allMaps.txt
+cat $TEMPDIR/allMaps.txt | sort | uniq | wc -l # 
+cat $TEMPDIR/allMaps.txt | awk -F'\\|\\|\\|' '{print $2}' | sort | uniq | wc -l # 
+cp $TEMPDIR/allMaps.txt $RESULTS/nameTranslator.txt
+# 25958450, does not match with the simplifierSummary because some did not have to be simplified
+cat $RESULTS/nameTranslator.txt | sort | uniq | wc -l 
+awk -F'_' '{print $1}' $RESULTS/nameTranslator.txt | sort | uniq -c | awk '{print $2","$1}' > $HELPERS/numberOfPrimaryProteins.csv
+awk -F',' '{TOTSUM+=$2}END{print TOTSUM}' $HELPERS/numberOfPrimaryProteins.csv
+# 25958450
+```
+
+# Remove short peptides and merge all files
+
+```{sh}
+for CURFILE in $HELPERS/PrimarySequencesOnly/*.simple.fasta.gz; do 
+python $SCRIPTDIR/searchLongerProteins.py 150 $CURFILE
+done > $TEMPDIR/allProts_150.fasta
+fgrep ">" $TEMPDIR/allProts_150.fasta | wc -l
+# 
+
+for CURFILE in $HELPERS/PrimarySequencesOnly/*.simple.fasta.gz; do 
+python $SCRIPTDIR/searchLongerProteins.py 250 $CURFILE
+done > $TEMPDIR/allProts.fasta
+fgrep ">" $TEMPDIR/allProts.fasta | wc -l
+# 7690505
+
+echo -e "Chispanica_23192\nSpennellii_43284" > $TEMPDIR/removeThese.txt
+fgrep ">" $TEMPDIR/allProts.fasta | sed 's/>//g' > $TEMPDIR/allIDs.txt
+cat $TEMPDIR/allIDs.txt $TEMPDIR/removeThese.txt | sort | uniq -u > $TEMPDIR/keepThese.txt
+wc -l $TEMPDIR/allIDs.txt
+wc -l $TEMPDIR/keepThese.txt
+rm $TEMPDIR/allProts.fasta.fai
+samtools faidx -r $TEMPDIR/keepThese.txt $TEMPDIR/allProts.fasta > $TEMPDIR/allProts.noUltraRep.fasta
+rm $TEMPDIR/allProts.fasta.fai
+mv $TEMPDIR/allProts.noUltraRep.fasta $TEMPDIR/allProts.fasta
+
+echo -e "Chispanica_23192\nSpennellii_43284\nStuberosum_17793" > $TEMPDIR/removeThese.txt
+fgrep ">" $TEMPDIR/allProts_150.fasta | sed 's/>//g' > $TEMPDIR/allIDs.txt
+cat $TEMPDIR/allIDs.txt $TEMPDIR/removeThese.txt | sort | uniq -u > $TEMPDIR/keepThese.txt
+wc -l $TEMPDIR/allIDs.txt
+wc -l $TEMPDIR/keepThese.txt
+rm $TEMPDIR/allProts_150.fasta.fai
+samtools faidx -r $TEMPDIR/keepThese.txt $TEMPDIR/allProts_150.fasta > $TEMPDIR/allProts_150.noUltraRep.fasta
+rm $TEMPDIR/allProts_150.fasta.fai
+mv $TEMPDIR/allProts_150.noUltraRep.fasta $TEMPDIR/allProts_150.fasta
+
+fgrep ">" $TEMPDIR/allProts_150.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,genesSearched"}{print $2","$1}' > $RESULTS/numberOfGenesAtSearchBegin_150.csv
+fgrep ">" $TEMPDIR/allProts.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,genesSearched"}{print $2","$1}' > $RESULTS/numberOfGenesAtSearchBegin.csv
+wc -l $RESULTS/numberOfGenesAtSearchBegin.csv
+# 351
+#zcat  $HELPERS/PrimarySequencesOnly/Athaliana.map.gz | fgrep AT5G46330
+#zcat  $HELPERS/PrimarySequencesOnly/Athaliana.map.gz | fgrep AT5G20480
+#zcat  $HELPERS/PrimarySequencesOnly/Athaliana.simple.fasta.gz | grep "Athaliana_24101\|Athaliana_10269"
+#grep "Athaliana_24101\|Athaliana_10269" $TEMPDIR/allProts.fasta
+```
+
+# Use PFAM to search for LRR and KD
+
+```{sh}
+hmmsearch --tblout $TEMPDIR/pkinase_candidates.hmm -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/allProts.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates.hmm -E 1e-3 --cpu 30 $CURHMM $TEMPDIR/allProts.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates.txt | sort | uniq > $TEMPDIR/allLRR_candidates.txt
+comm -12 $TEMPDIR/allLRR_candidates.txt $TEMPDIR/pkinase_candidates.txt | sort | uniq > $TEMPDIR/lrrAndPkinase_candidates.txt
+wc -l $TEMPDIR/lrrAndPkinase_candidates.txt
+# 87325 (same as without removing the two ugly ones)
+fgrep "Athaliana" $TEMPDIR/lrrAndPkinase_candidates.txt | sort | uniq | wc -l # 214
+fgrep "Athaliana" $TEMPDIR/lrrAndPkinase_candidates.txt | sort | uniq | grep "Athaliana_24101\|Athaliana_10269"
+
+################################################################################################
+################################################################################################
+################################################ skip this and just use the output from below
+# phyto LRR, TODO
+export PATH="$PATH:$HOME/miniconda2/bin"
+python2 $SCRIPTDIR/replaceXwithG.py $TEMPDIR/allProts.fasta $TEMPDIR/allProtsGinsteadOfX.fasta $TEMPDIR/changedResidues.txt
+#source activate LRR
+#predict-phytolrr -f $TEMPDIR/allProtsGinsteadOfX.fasta > $TEMPDIR/lrrPredictionForFilter.txt
+#python2 $SCRIPTDIR/lrrPredToBed.py $TEMPDIR/lrrPredictionForFilter.txt > $TEMPDIR/lrrPredictionForFilterWithReplace.bed
+#python2 $SCRIPTDIR/revertSequences.py $TEMPDIR/lrrPredictionForFilterWithReplace.bed $TEMPDIR/changedResidues.txt > $TEMPDIR/lrrPredictionForFilter.bed
+#source deactivate
+
+mkdir -p $TEMPDIR/splitFiles
+python2 $SCRIPTDIR/splitOneFastaIntoCertainNumber.py $TEMPDIR/allProtsGinsteadOfX.fasta $TEMPDIR/splitFiles 3000
+source activate LRR
+ls $TEMPDIR/splitFiles/split_*.fasta | parallel -j 30 'predict-phytolrr -f {} > {.}.txt'
+source deactivate
+cat $TEMPDIR/splitFiles/*.txt > $TEMPDIR/lrrPredictionForFilter.txt
+python2 $SCRIPTDIR/lrrPredToBed.py $TEMPDIR/lrrPredictionForFilter.txt > $TEMPDIR/lrrPredictionForFilterWithReplace.bed
+python2 $SCRIPTDIR/revertSequences.py $TEMPDIR/lrrPredictionForFilterWithReplace.bed $TEMPDIR/changedResidues.txt > $TEMPDIR/lrrPredictionForFilter.bed
+
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter.bed | sort | uniq > $TEMPDIR/phytoLRR_candidates.txt
+comm -12 $TEMPDIR/phytoLRR_candidates.txt $TEMPDIR/pkinase_candidates.txt | sort | uniq > $TEMPDIR/phytoLrrAndPkinase_candidates.txt
+wc -l $TEMPDIR/phytoLrrAndPkinase_candidates.txt
+# 
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates.txt | sort | uniq | wc -l # 214
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates.txt | sort | uniq | grep "Athaliana_24101\|Athaliana_10269"
+
+# some splits take akes
+mkdir -p $TEMPDIR/splitFilesMore
+python2 $SCRIPTDIR/splitOneFastaIntoCertainNumber.py $TEMPDIR/splitFiles/split_6309783.fasta $TEMPDIR/splitFilesMore 300
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate LRR
+ls $TEMPDIR/splitFilesMore/split_*.fasta | parallel -j 30 'predict-phytolrr -f {} > {.}.txt'
+source deactivate
+fgrep -A 1 Chispanica_23192 $TEMPDIR/splitFilesMore/split_306.fasta > $TEMPDIR/testThis.fasta
+predict-phytolrr -f $TEMPDIR/testThis.fasta > $TEMPDIR/testThis.txt
+# remove this sequence: Chispanica_23192
+mkdir -p $TEMPDIR/splitFilesMore
+python2 $SCRIPTDIR/splitOneFastaIntoCertainNumber.py $TEMPDIR/splitFiles/split_4191336.fasta $TEMPDIR/splitFilesMore 300
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate LRR
+ls $TEMPDIR/splitFilesMore/split_*.fasta | parallel -j 30 'predict-phytolrr -f {} > {.}.txt'
+source deactivate
+cat $TEMPDIR/splitFilesMore/split_1422.fasta
+fgrep -A 1 Spennellii_43284 $TEMPDIR/splitFilesMore/split_1422.fasta > $TEMPDIR/testThis.fasta
+predict-phytolrr -f $TEMPDIR/testThis.fasta > $TEMPDIR/testThis.txt
+# remove this sequence: Spennellii_43284
+mkdir -p $TEMPDIR/splitFilesMore
+python2 $SCRIPTDIR/splitOneFastaIntoCertainNumber.py $TEMPDIR/splitFiles_150/split_878265.fasta $TEMPDIR/splitFilesMore 300
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate LRR
+ls $TEMPDIR/splitFilesMore/split_*.fasta | parallel -j 30 'predict-phytolrr -f {} > {.}.txt'
+source deactivate
+cat $TEMPDIR/splitFilesMore/split_2832.fasta
+fgrep -A 1 Stuberosum_17793 $TEMPDIR/splitFilesMore/split_2832.fasta > $TEMPDIR/testThis.fasta
+predict-phytolrr -f $TEMPDIR/testThis.fasta > $TEMPDIR/testThis.txt
+# remove this sequence: Stuberosum_17793
+################################################################################################
+################################################################################################
+################################################################################################
+
+# with 150 aa
+hmmsearch --tblout $TEMPDIR/pkinase_candidates_150.hmm -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/allProts_150.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates_150.hmm -E 1e-3 --cpu 30 $CURHMM $TEMPDIR/allProts_150.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates_150.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates_150.txt | sort | uniq > $TEMPDIR/allLRR_candidates_150.txt
+comm -12 $TEMPDIR/allLRR_candidates_150.txt $TEMPDIR/pkinase_candidates_150.txt | sort | uniq > $TEMPDIR/lrrAndPkinase_candidates_150.txt
+wc -l $TEMPDIR/lrrAndPkinase_candidates_150.txt
+# 87010
+fgrep "Athaliana" $TEMPDIR/lrrAndPkinase_candidates_150.txt | sort | uniq | wc -l # 213
+fgrep "Athaliana" $TEMPDIR/lrrAndPkinase_candidates_150.txt | sort | uniq | grep "Athaliana_24101\|Athaliana_10269"
+
+# phyto LRR, TODO
+export PATH="$PATH:$HOME/miniconda2/bin"
+python2 $SCRIPTDIR/replaceXwithG.py $TEMPDIR/allProts_150.fasta $TEMPDIR/allProtsGinsteadOfX_150.fasta $TEMPDIR/changedResidues_150.txt
+mkdir -p $TEMPDIR/splitFiles_150
+python2 $SCRIPTDIR/splitOneFastaIntoCertainNumber.py $TEMPDIR/allProtsGinsteadOfX_150.fasta $TEMPDIR/splitFiles_150 3000
+source activate LRR
+ls $TEMPDIR/splitFiles_150/split_*.fasta | parallel -j 30 'predict-phytolrr -f {} > {.}.txt'
+source deactivate
+cat $TEMPDIR/splitFiles_150/*.txt > $TEMPDIR/lrrPredictionForFilter.txt
+python2 $SCRIPTDIR/lrrPredToBed.py $TEMPDIR/lrrPredictionForFilter.txt > $TEMPDIR/lrrPredictionForFilterWithReplace.bed
+python2 $SCRIPTDIR/revertSequences.py $TEMPDIR/lrrPredictionForFilterWithReplace.bed $TEMPDIR/changedResidues_150.txt > $TEMPDIR/lrrPredictionForFilter_150.bed
+
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter_150.bed | sort | uniq > $TEMPDIR/phytoLRR_candidates_150.txt
+comm -12 $TEMPDIR/phytoLRR_candidates_150.txt $TEMPDIR/pkinase_candidates_150.txt | sort | uniq > $TEMPDIR/phytoLrrAndPkinase_candidates_150.txt
+wc -l $TEMPDIR/phytoLrrAndPkinase_candidates_150.txt
+# 153337
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates_150.txt | sort | uniq | wc -l # 372
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates_150.txt | sort | uniq | grep "Athaliana_24101\|Athaliana_10269"
+
+
+
+
+
+## phytoLRR would have much more...
+# extract the longer ones
+fgrep ">" $TEMPDIR/allProts.fasta | sed 's/>//g' > $TEMPDIR/allIDs.txt
+fgrep -w -f $TEMPDIR/allIDs.txt $TEMPDIR/lrrPredictionForFilter_150.bed > $TEMPDIR/lrrPredictionForFilter.bed
+awk '{print $1}' $TEMPDIR/lrrPredictionForFilter.bed | sort | uniq > $TEMPDIR/phytoLRR_candidates.txt
+comm -12 $TEMPDIR/phytoLRR_candidates.txt $TEMPDIR/pkinase_candidates.txt | sort | uniq > $TEMPDIR/phytoLrrAndPkinase_candidates.txt
+wc -l $TEMPDIR/phytoLrrAndPkinase_candidates.txt
+# 152556
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates.txt | sort | uniq | wc -l # 372
+fgrep "Athaliana" $TEMPDIR/phytoLrrAndPkinase_candidates.txt | sort | uniq | grep "Athaliana_24101\|Athaliana_10269"
+
+## compare 250 and 150
+comm -13 $TEMPDIR/lrrAndPkinase_candidates.txt $TEMPDIR/lrrAndPkinase_candidates_150.txt > $TEMPDIR/only150.txt
+comm -23 $TEMPDIR/lrrAndPkinase_candidates.txt $TEMPDIR/lrrAndPkinase_candidates_150.txt > $TEMPDIR/only250.txt
+wc -l $TEMPDIR/only150.txt
+wc -l $TEMPDIR/only250.txt
+# only 12 more if < 150 are included, but 327 are missing. Stay with 250 aa
+```
+
+# Check tm-domains on phytoLRR candidates?
+
+```{sh}
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/phytoLrrAndPkinase_candidates.txt > $TEMPDIR/phytoLrrAndPkinase_candidates.fasta
+# tmhmm
+export PATH="$PATH:$HOME/tmhmm-2.0c/bin"
+tmhmm $TEMPDIR/phytoLrrAndPkinase_candidates.fasta > $TEMPDIR/phytoLrrAndPkinase_tmhmm.res
+python $SCRIPTDIR/extractTMproteins.py 0 $TEMPDIR/phytoLrrAndPkinase_tmhmm.res $TEMPDIR/phytoLrrAndPkinase_candidates.fasta $TEMPDIR/phytoLrrAndPkinase_candidatesWithTM.fasta
+fgrep ">" $TEMPDIR/phytoLrrAndPkinase_candidatesWithTM.fasta | wc -l
+# 117091
+```
+
+# Use NCBI to get a taxonomic tree
+
+https://www.ncbi.nlm.nih.gov/Taxonomy/CommonTree/wwwcmt.cgi
+
+```{sh}
+$HELPERS/Revised_tree.phy
+$HELPERS/Revised_tree_marc.phy
+```
+
+# Extract Kinase Domain
+
+```{sh}
+# extract candidates
+rm $TEMPDIR/*.fai
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/lrrAndPkinase_candidates.txt > $TEMPDIR/lrrAndPkinase_candidates.fasta
+samtools faidx $TEMPDIR/allProts_150.fasta -r $TEMPDIR/lrrAndPkinase_candidates_150.txt > $TEMPDIR/lrrAndPkinase_candidates_150.fasta
+
+# domain search as above
+hmmsearch --domtblout $TEMPDIR/raw.domtblout -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/lrrAndPkinase_candidates.fasta
+hmmsearch --domtblout $TEMPDIR/raw_150.domtblout -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/lrrAndPkinase_candidates_150.fasta
+
+# extract position
+# NO filter criteria at least 200/260 of the reference need to be present)
+#cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "Pkinase" && RefLen >= 0) print $1, $18, $19, $22}' > $TEMPDIR/kinasePosition.bed
+cat $TEMPDIR/raw.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "Pkinase" && RefLen >= 0) print $1, $18, $19, $14}' > $TEMPDIR/kinasePosition.bed
+cat $TEMPDIR/raw_150.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if($4 == "Pkinase" && RefLen >= 0) print $1, $18, $19, $14}' > $TEMPDIR/kinasePosition_150.bed
+
+# filter for highest score
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/kinasePosition.bed > $TEMPDIR/uniqKinase.bed
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/kinasePosition_150.bed > $TEMPDIR/uniqKinase_150.bed
+gzip -c $TEMPDIR/uniqKinase.bed > $RESULTS/uniqKinase.bed.gz
+gzip -c $TEMPDIR/uniqKinase_150.bed > $RESULTS/uniqKinase_150.bed.gz
+
+# extract kinase domains
+rm $TEMPDIR/*.fai
+bedtools getfasta -fi $TEMPDIR/lrrAndPkinase_candidates.fasta -bed $TEMPDIR/uniqKinase.bed > $TEMPDIR/kinaseDomainSequences.fasta
+fgrep ">" $TEMPDIR/kinaseDomainSequences.fasta | wc -l
+# 87325
+
+# check if RD or not
+#wc -l $TEMPDIR/kinaseDomainSequences.fasta # one per line
+grep -o "RD[[:alpha:]]\{1\}[YTS]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l
+grep -o "[HY]RD[[:alpha:]]\{1\}[YTS]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l
+grep -o "[HYQCS]RD[[:alpha:]]\{1\}[YTS]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l 
+grep -o "[HYQCS]RD[[:alpha:]]\{1\}[YTSHRKDCE]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l 
+grep -o "[HYQCS]RD[[:alpha:]]\{1\}[YTSHRKDCE][[:alpha:]]\{2\}N[VI]LL" $TEMPDIR/kinaseDomainSequences.fasta | wc -l 
+grep -o "[HYQCS]RD[[:alpha:]]\{1\}[YTSHRKDCE][[:alpha:]]\{2\}N[VI][YL][VIML]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l 
+#grep -o "[HYQCS]RD[[:alpha:]]\{0,2\}[YTSHRKDCE]" $TEMPDIR/kinaseDomainSequences.fasta | wc -l # doesn't change much
+
+grep -o "[HYQCS]RD[[:alpha:]]\{1\}[YTSHRKDCE]" $TEMPDIR/kinaseDomainSequences.fasta | sort | uniq -c
+grep -B 1 "[HYQCS]RD[[:alpha:]]\{1\}[YTSHRKDCE]" $TEMPDIR/kinaseDomainSequences.fasta > $TEMPDIR/RDcandidates.fasta
+famsa -t 30 -v $TEMPDIR/RDcandidates.fasta $TEMPDIR/RDcandidates.align
+cp $TEMPDIR/RDcandidates.align $HELPERS/
+fgrep ">" $TEMPDIR/RDcandidates.fasta | sed 's/>//g' > $RESULTS/RD_kinases.txt
+
+# based on the alignment one could extend the motif to:
+"[[:alpha:]]\{2\}N[VI]LL"
+"[[:alpha:]]\{2\}N[VI][YL][VIML]"
+```
+
+**The pattern in front is from https://doi.org/10.1371/journal.ppat.0020002.st001, the pattern behind are just all phosphorylatable AAs**.
+
+# Align all, do a tree, and do the subgroup classification - no, we skipped that
+
+```{sh}
+# get the outgroup
+cat $TEMPDIR/forOutgroupOrder.txt | while read LINE; do
+numHits=$(fgrep $LINE $TEMPDIR/kinaseDomainSequences.fasta | wc -l)
+if [ $numHits -gt 0 ]; then
+fgrep $LINE $TEMPDIR/kinaseDomainSequences.fasta | sed 's/>//g' | awk -F':' '{print $1}' > $TEMPDIR/kinaseDomainSequences.outgroup
+break
+fi
+done
+
+famsa -t 30 -v $TEMPDIR/kinaseDomainSequences.fasta $TEMPDIR/kinaseDomainSequences.align
+FastTree -lg $TEMPDIR/kinaseDomainSequences.align > $TEMPDIR/kinaseDomainSequences.unrooted.tree
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate gotree
+gotree reroot outgroup -t 16 -i $TEMPDIR/kinaseDomainSequences.unrooted.tree -l $TEMPDIR/kinaseDomainSequences.outgroup -o $TEMPDIR/kinaseDomainSequences.rooted.tree
+source deactivate
+
+gzip -c $TEMPDIR/kinaseDomainSequences.align > $RESULTS/kinaseDomainSequences.align.gz
+gzip -c $TEMPDIR/kinaseDomainSequences.rooted.tree > $RESULTS/kinaseDomainSequences.rooted.tree.gz
+
+# Take only XI and XII
+awk -F',' '{if (($2=="LRR-XI")||($2=="LRR-XII")) {print $3}}' $RESULTS/candsToArabidopsisSubgroup.csv > $TEMPDIR/useThese.txt
+cat $TEMPDIR/kinaseDomainSequences.fasta | awk -F':' '{print $1}' > $TEMPDIR/kinaseDomainSequences.onlyID.fasta
+samtools faidx $TEMPDIR/kinaseDomainSequences.onlyID.fasta -r $TEMPDIR/useThese.txt > $TEMPDIR/kinaseDomainSequences.subset.fasta
+
+cat $TEMPDIR/forOutgroupOrder.txt | while read LINE; do
+numHits=$(fgrep $LINE $TEMPDIR/kinaseDomainSequences.subset.fasta | wc -l)
+if [ $numHits -gt 0 ]; then
+fgrep $LINE $TEMPDIR/kinaseDomainSequences.subset.fasta | sed 's/>//g' | awk -F':' '{print $1}' > $TEMPDIR/kinaseDomainSequences.subset.outgroup
+break
+fi
+done
+
+famsa -t 30 -v $TEMPDIR/kinaseDomainSequences.subset.fasta $TEMPDIR/kinaseDomainSequences.subset.align
+FastTree -lg $TEMPDIR/kinaseDomainSequences.subset.align > $TEMPDIR/kinaseDomainSequences.subset.unrooted.tree
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate gotree
+gotree reroot outgroup -t 16 -i $TEMPDIR/kinaseDomainSequences.subset.unrooted.tree -l $TEMPDIR/kinaseDomainSequences.subset.outgroup -o $TEMPDIR/kinaseDomainSequences.subset.rooted.tree
+source deactivate
+
+gzip -c $TEMPDIR/kinaseDomainSequences.subset.align > $RESULTS/kinaseDomainSequences.subset.align.gz
+gzip -c $TEMPDIR/kinaseDomainSequences.subset.rooted.tree > $RESULTS/kinaseDomainSequences.subset.rooted.tree.gz
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Match kinase domains to the arabidopsis subgroups and assign them to the group with the highest average similarity
+
+```{sh}
+diamond makedb -p 30 --in $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta -d $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta
+diamond blastp -p 30 -q $TEMPDIR/kinaseDomainSequences.fasta -d $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta -o $TEMPDIR/candsToArabidopsisBlast.tsv -e 1e-10 -k 300
+gzip -f $TEMPDIR/candsToArabidopsisBlast.tsv
+Rscript $SCRIPTDIR/assignCandidatesToSubgroups.R $TEMPDIR/candsToArabidopsisBlast.tsv.gz $TEMPDIR/candsToArabidopsisSubgroup.csv
+cp $TEMPDIR/candsToArabidopsisBlast.tsv.gz $RESULTS/
+cp $TEMPDIR/candsToArabidopsisSubgroup.csv $RESULTS/
+
+zcat $TEMPDIR/candsToArabidopsisBlast.tsv.gz | awk '{print $1}' | sort | uniq > $TEMPDIR/finallyPresent.txt
+fgrep ">" $TEMPDIR/kinaseDomainSequences.fasta | sed 's/>//g' | sort | uniq > $TEMPDIR/originallyPresent.txt
+comm -3 $TEMPDIR/originallyPresent.txt $TEMPDIR/finallyPresent.txt > $TEMPDIR/missing.txt
+wc -l $TEMPDIR/missing.txt
+# 228
+
+wc -l $TEMPDIR/finallyPresent.txt
+# 87097
+wc -l $TEMPDIR/candsToArabidopsisSubgroup.csv
+# 87098 (minus header)
+```
+
+# Get a table with counts per species and sort according to taxonomic tree (remove the single quotes in the tree file and replace space with dots!)
+
+```{sh}
+ls -lhrt $HELPERS/PrimarySequencesOnly/*.simple.fasta.gz | awk -F'/' '{gsub(".simple.fasta.gz","",$NF); print $NF}' > $HELPERS/allSpeciesList.txt
+#python $SCRIPTDIR/convertPhyloXmlToNewick.py $HELPERS/Revised_tree.phyloxml $HELPERS/Revised_tree.phy
+sed -i 's/_/./g' $HELPERS/Revised_tree_marc.phy
+Rscript $SCRIPTDIR/getCountPerSpeciesTable.R $HELPERS/allSpeciesList.txt $HELPERS/Revised_tree_marc.phy $RESULTS/candsToArabidopsisSubgroup.csv $RESULTS/proteinsPerSpecies.csv --RDkinases $RESULTS/RD_kinases.txt
+awk -F',' '{if (NR>1) {print $1}}' $RESULTS/proteinsPerSpecies.csv | sed 's/"//g' > $TEMPDIR/forOutgroupOrder.txt
+```
+
+# Extract and align subgroups, do phylogeny, use and remove outgroup
+
+```{sh}
+awk -F',' -v tempo=$TEMPDIR '{if (NR>1) {print $1 > tempo"/kdBySg_"$2".txt"}}' $TEMPDIR/candsToArabidopsisSubgroup.csv
+
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate gotree
+rm $TEMPDIR/*.fai
+echo -e "Group\tOutgroup" > $TEMPDIR/outgroups.txt
+for CURFILE in $TEMPDIR/kdBySg_*.txt; do 
+PREFIX=$(basename $CURFILE .txt)
+samtools faidx $TEMPDIR/kinaseDomainSequences.fasta -r $CURFILE > $TEMPDIR/$PREFIX.fasta
+# search the most basal and take them as outgroup
+cat $TEMPDIR/forOutgroupOrder.txt | while read LINE; do
+numHits=$(fgrep $LINE $TEMPDIR/$PREFIX.fasta | wc -l)
+if [ $numHits -gt 0 ]; then
+echo -e "$PREFIX\t$LINE" >> $TEMPDIR/outgroups.txt
+fgrep $LINE $TEMPDIR/$PREFIX.fasta | sed 's/>//g' | awk -F':' '{print $1}' > $TEMPDIR/$PREFIX.outgroup
+break
+fi
+done
+famsa -t 30 -v $TEMPDIR/$PREFIX.fasta $TEMPDIR/$PREFIX.align
+FastTree -lg $TEMPDIR/$PREFIX.align > $TEMPDIR/$PREFIX.unrooted.tree
+gotree reroot outgroup -t 16 -i $TEMPDIR/$PREFIX.unrooted.tree -l $TEMPDIR/$PREFIX.outgroup -o $TEMPDIR/$PREFIX.rooted.tree
+gzip -f $TEMPDIR/$PREFIX.fasta
+gzip -f $TEMPDIR/$PREFIX.align
+gzip -f $TEMPDIR/$PREFIX.rooted.tree
+cp $TEMPDIR/$PREFIX.*.gz $RESULTS/
+cp $TEMPDIR/$PREFIX.outgroup $RESULTS/
+done
+source deactivate
+```
+
+# Get a fasta with complete sequences
+
+```{sh}
+awk -F',' '{if (NR>1) {print $3}}' $RESULTS/candsToArabidopsisSubgroup.csv > $TEMPDIR/allNames.txt
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/allNames.txt > $TEMPDIR/fullSequences.fasta
+gzip -c $TEMPDIR/fullSequences.fasta > $RESULTS/fullSequences.fasta.gz
+```
+
+# Extract tables with the original names
+
+```{sh}
+#awk '{print $0"|||"}' $TEMPDIR/allNames.txt > $TEMPDIR/allNamesWithSeparator.txt
+#fgrep -f $TEMPDIR/allNamesWithSeparator.txt $TEMPDIR/allMaps.txt > $RESULTS/nameTranslator.txt
+#wc -l $RESULTS/nameTranslator.txt
+#86899
+fgrep ">" $TEMPDIR/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta | awk -F'__' '{print $2}' | sed 's/\.[[:digit:]]*//g' | sort | uniq > $TEMPDIR/forGrep.txt
+wc -l $TEMPDIR/forGrep.txt # 220
+fgrep -f $TEMPDIR/forGrep.txt $RESULTS/nameTranslator.txt | fgrep "Athaliana" | awk -F'\\|\\|\\|' '{print $1}' | sort | uniq > $TEMPDIR/matched.txt
+wc -l $TEMPDIR/matched.txt # 220
+zcat $RESULTS/fullSequences.fasta.gz | fgrep ">" | sed 's/>//g' | fgrep "Athaliana" | sort | uniq > $TEMPDIR/allCandidatesArabidopsis.txt
+comm -23 $TEMPDIR/matched.txt $TEMPDIR/allCandidatesArabidopsis.txt > $TEMPDIR/missingArabidopsis.txt
+wc -l $TEMPDIR/missingArabidopsis.txt
+# 11 are missing!
+
+fgrep -w -f $TEMPDIR/missingArabidopsis.txt $TEMPDIR/pkinase_candidates.txt
+fgrep -w -f $TEMPDIR/missingArabidopsis.txt $TEMPDIR/allLRR_candidates.txt
+# they don't have both (it's a thresholding issue)
+```
+
+# Check whether some genes are in more than one sets (after running the other stuff)
+
+```{sh}
+zcat $RESULTS/fullSequences.fasta.gz | fgrep ">" | sed 's/>//g' | sort | uniq > $TEMPDIR/RLK.txt
+zcat $RESULTS/fullSequences_NLR.fasta.gz | fgrep ">" | sed 's/>//g' | sort | uniq > $TEMPDIR/NLR.txt
+zcat $RESULTS/fullSequences_RLP.fasta.gz | fgrep ">" | sed 's/>//g' | sort | uniq > $TEMPDIR/RLP.txt
+
+comm -12 $TEMPDIR/RLK.txt $TEMPDIR/NLR.txt | wc -l
+comm -12 $TEMPDIR/RLK.txt $TEMPDIR/RLP.txt | wc -l
+comm -12 $TEMPDIR/NLR.txt $TEMPDIR/RLP.txt | wc -l
+
+# in common: 0, 0, 10
+cat $TEMPDIR/RLK.txt $TEMPDIR/NLR.txt $TEMPDIR/RLP.txt | sort | uniq | awk '{print $0"|||"}'> $TEMPDIR/allGenesWithSeparator.txt
+#fgrep -f $TEMPDIR/allGenesWithSeparator.txt $TEMPDIR/allMaps.txt > $RESULTS/nameTranslator.txt
+```
+
+# Collect
+
+```{sh}
+COLLECT=$HOME/Downloads/forBrunoAndJJ
+
+mkdir -p $COLLECT/moreInfos
+cp $HELPERS/speciesForTree.txt $COLLECT/moreInfos/
+cp $HELPERS/Revised_tree_marc.phy $COLLECT/moreInfos/
+cp $HELPERS/ArabidopsisWithSubgroupPrefix.fasta $COLLECT/moreInfos/
+cp $HELPERS/simplifierSummary.csv $COLLECT/moreInfos/
+cp $HELPERS/firstRound.log $COLLECT/moreInfos/
+cp $HELPERS/secondRound.log $COLLECT/moreInfos/
+
+cp $RESULTS/ArabidopsisWithSubgroupPrefix_withBothDomains.fasta $COLLECT/moreInfos/
+cp $RESULTS/arabidopsisWithoutBothDomains.txt $COLLECT/moreInfos/
+cp $HELPERS/forC3search_manualByMarc.align $COLLECT/moreInfos/
+#cp $RESULTS/RLP_numberOfGenesAtSearchBegin.csv $COLLECT/
+cp $RESULTS/numberOfGenesAtSearchBegin.csv $COLLECT/
+
+awk -F',' '{print $3","$2}' $RESULTS/candsToArabidopsisSubgroup.csv > $COLLECT/fullSequences.idToSubgroup.txt
+cp $RESULTS/*.idToSubgroup.txt $COLLECT/
+cp $RESULTS/*.ids.txt $COLLECT/
+cp $RESULTS/fullSequences.fasta.gz $COLLECT/
+#cp $RESULTS/nameTranslator.txt $COLLECT/
+cp $RESULTS/proteinsPerSpecies.csv $COLLECT/
+cp $RESULTS/proteinsPerSpecies.*.csv $COLLECT/
+cp $RESULTS/proteinsPerSpecies.tree $COLLECT/
+
+mkdir -p $COLLECT/sequences
+cp $RESULTS/kdBySg_*.fasta.gz $COLLECT/sequences/
+mkdir -p $COLLECT/alignments
+cp $RESULTS/kdBySg_*.align.gz $COLLECT/alignments/
+mkdir -p $COLLECT/trees
+cp $RESULTS/kdBySg_*.rooted.tree.gz $COLLECT/trees/
+cp $RESULTS/kdBySg_*.outgroup $COLLECT/trees/
+
+# NLR and RLP
+cp $RESULTS/fullSequences_NLR.fasta.gz $COLLECT/NLR_fullSequences.fasta.gz
+cp $RESULTS/fullSequences_RLP.fasta.gz $COLLECT/RLP_fullSequences.fasta.gz
+cp $RESULTS/fullSequences_RLP_150.fasta.gz $COLLECT/RLP_fullSequences_150.fasta.gz
+cp $RESULTS/lrrAndNbArc_candidates_per_species.csv $COLLECT/NLR_candidates_per_species.csv
+cp $RESULTS/LRR_RLP_candidates_per_species.csv $COLLECT/RLP_candidates_per_species.csv
+cp $RESULTS/LRR_RLP_candidates_per_species_150.csv $COLLECT/RLP_candidates_per_species_150.csv
+
+cp $RESULTS/allCountsPerSpecies.csv $COLLECT/
+cp $RESULTS/allCountsPerSpeciesSubsetByTree.csv $COLLECT/
+
+# run first the things below
+cp $RESULTS/allCountsPerSpeciesSubsetByTree.csv $COLLECT/
+cp $HELPERS/megaphyloTreeSelectedSpecies.midpoint.tre $COLLECT/
+cp $HELPERS/megaphyloTreeSelectedSpecies.outgroup.tre $COLLECT/
+
+# mantel tests (add this)
+mkdir -p $COLLECT/mantelTests
+cp $RESULTS/correlationAnalysis* $COLLECT/mantelTests/
+
+# distribution testing
+mkdir -p $COLLECT/distributionTest
+cp $TESTING/* $COLLECT/distributionTest/
+
+# get the real names
+for CURFILE in $COLLECT/*.idToSubgroup.txt; do
+awk -F',' '{if (NR>1) {print $1"|||"}}' $CURFILE > $TEMPDIR/forGrep.txt
+fgrep -f $TEMPDIR/forGrep.txt $RESULTS/nameTranslator.txt > ${CURFILE//.txt}.realNames.txt
+wc -l $TEMPDIR/forGrep.txt
+wc -l  ${CURFILE//.txt}.realNames.txt
+done
+for CURFILE in $COLLECT/*.ids.txt; do
+awk '{print $1"|||"}' $CURFILE > $TEMPDIR/forGrep.txt
+fgrep -f $TEMPDIR/forGrep.txt $RESULTS/nameTranslator.txt > ${CURFILE//.txt}.realNames.txt
+wc -l $TEMPDIR/forGrep.txt
+wc -l  ${CURFILE//.txt}.realNames.txt
+done
+```
+
+# Get full sequences from LRR-RLK groups
+
+```{sh}
+zcat $RESULTS/fullSequences.fasta.gz > $TEMPDIR/fullSequences.fasta
+for CURFILE in $RESULTS/kdBySg_*.fasta.gz; do
+PREFIX=$(basename $CURFILE .fasta.gz)
+zcat $CURFILE | fgrep ">" | sed 's/>//g' | awk -F':' '{print $1}' | sort | uniq > $TEMPDIR/$REFIX.txt
+samtools faidx $TEMPDIR/fullSequences.fasta -r $TEMPDIR/$REFIX.txt | gzip > $TEMPDIR/full.$PREFIX.fasta.gz
+done
+cp $TEMPDIR/full.*.fasta.gz $RESULTS/
+
+```
+
+# Collect for Zenodo
+
+```{sh}
+COLLECT=$HOME/Downloads/forBrunoZenodo
+mkdir -p $COLLECT/RLK_sequences
+mkdir -p $COLLECT/RLK_trees
+mkdir -p $COLLECT/min150AA
+mkdir -p $COLLECT/min250AA
+
+cp $RESULTS/full.kdBySg_*.fasta.gz $COLLECT/RLK_sequences/
+cp $RESULTS/fullSequences.fasta.gz $COLLECT/RLK_sequences/all.LRR-RLK.fasta.gz
+cp $RESULTS/kdBySg_*.rooted.tree.gz $COLLECT/RLK_trees/
+cp $RESULTS/kinaseDomainSequences.rooted.tree.gz $COLLECT/RLK_trees/all.LRR-RLK.rooted.tree.gz
+
+cp $HELPERS/megaphyloTreeSelectedSpecies.outgroup.tre $COLLECT/238.species.tree
+cp $HELPERS/Revised_tree.phy $COLLECT/350.species.ncbi.tree
+
+cp $RESULTS/fullSequences_RLP.fasta.gz $COLLECT/min250AA/RLP.fasta.gz
+cp $RESULTS/fullSequences_onlyNbArc.fasta.gz $COLLECT/min250AA/NB-ARC.fasta.gz
+cp $RESULTS/LysM_candidatesWithTMDandKinase.fasta.gz $COLLECT/min250AA/LysM-RLK.fasta.gz
+cp $RESULTS/LysM_candidatesWithTMDnoKinase.fasta.gz $COLLECT/min250AA/LysM-RLP.fasta.gz
+cp $RESULTS/fullSequences_RLP_150.fasta.gz $COLLECT/min150AA/RLP.fasta.gz
+cp $RESULTS/fullSequences_onlyNbArc_150.fasta.gz $COLLECT/min150AA/NB-ARC.fasta.gz
+cp $RESULTS/LysM_candidates_150WithTMDandKinase.fasta.gz $COLLECT/min150AA/LysM-RLK.fasta.gz
+cp $RESULTS/LysM_candidates_150WithTMDnoKinase.fasta.gz $COLLECT/min150AA/LysM-RLP.fasta.gz
+
+zcat $COLLECT/*/*.fasta.gz | fgrep ">" | sed 's/>//g' | sort | uniq | awk '{print $1"|||"}' > $TEMPDIR/all.ids.txt
+fgrep -f $TEMPDIR/all.ids.txt $RESULTS/nameTranslator.txt > $COLLECT/simple.to.original.ids.txt
+```
+
+# Check phylogenies with subset of species
+
+[megaphylogeny with vascular plants](https://academic.oup.com/jpe/article/9/2/233/2928108#supplementary-data)
+[another one with angiosperms](https://bdj.pensoft.net/article/39677/instance/5342091/)
+
+```{sh}
+Rscript $SCRIPTDIR/getMatchingSpeciesFromMegaphylogeny.R $HELPERS/speciesForTree.txt $HELPERS/megaphylo/tree/PhytoPhylo.tre $HELPERS/speciesInMegaphyloTree.txt $HELPERS/speciesMissingInMegaphyloTree.txt
+# ===  2022 Apr 20 01:53:12 PM === found 238 species.
+export PATH="$PATH:$HOME/miniconda2/bin"
+source activate gotree
+gotree prune -i $HELPERS/megaphylo/tree/PhytoPhylo.tre --tipfile $HELPERS/speciesMissingInMegaphyloTree.txt > $HELPERS/megaphyloTreeSelectedSpecies.unrooted.tre
+gotree reroot midpoint -i $HELPERS/megaphyloTreeSelectedSpecies.unrooted.tre -o $HELPERS/megaphyloTreeSelectedSpecies.midpoint.tre
+gotree reroot outgroup -i $HELPERS/megaphyloTreeSelectedSpecies.unrooted.tre -o $HELPERS/megaphyloTreeSelectedSpecies.outgroup.tre Marchantia_polymorpha
+source deactivate
+
+Rscript $SCRIPTDIR/replaceNamesForMichele.R $HELPERS/speciesInMegaphyloTree.txt $RESULTS/numberOfGenesAtSearchBegin.csv $RESULTS/numberOfGenesAtSearchBegin_150.csv $RESULTS/proteinsPerSpecies.csv $RESULTS/lrrAndNbArc_candidates_per_species.csv $RESULTS/LRR_RLP_candidates_per_species.csv $RESULTS/LRR_RLP_candidates_per_species_150.csv $RESULTS/onlyNbArc_candidates_per_species.csv $RESULTS/onlyNbArc_candidates_150_per_species.csv $RESULTS/LysM_RLK_candidates_per_species.csv $RESULTS/LysM_RLP_candidates_per_species.csv $RESULTS/LysM_RLK_candidates_150_per_species.csv $RESULTS/LysM_RLP_candidates_150_per_species.csv $RESULTS/allCountsPerSpecies.csv $RESULTS/allCountsPerSpeciesSubsetByTree.csv
+wc -l $RESULTS/allCountsPerSpecies.csv
+wc -l $RESULTS/allCountsPerSpeciesSubsetByTree.csv
+
+FORMICHELE="$HOME/Downloads/forMichele"
+mkdir -p $FORMICHELE
+cp $RESULTS/allCountsPerSpeciesSubsetByTree.csv $FORMICHELE/
+cp $HELPERS/megaphyloTreeSelectedSpecies.midpoint.tre $FORMICHELE/
+cp $HELPERS/megaphyloTreeSelectedSpecies.outgroup.tre $FORMICHELE/
+```
+
+# Test correlations with Micheles script
+
+```{sh}
+Rscript $SCRIPTDIR/testCorrelations.R $HELPERS/megaphyloTreeSelectedSpecies.outgroup.tre $RESULTS/allCountsPerSpecies.csv $RESULTS/allCountsPerSpeciesSubsetByTree.csv $RESULTS/correlationAnalysis
+```
+
+
+
+

@@ -1,0 +1,110 @@
+# Variables
+
+```{sh}
+BASEDIR="/media/mwschmid/myData/MWSchmid/JJ_Bruno"
+RESULTS="$BASEDIR/GitIgnore_results"
+HELPERS="$BASEDIR/GitIgnore_helpers"
+TESTING="$BASEDIR/GitIgnore_testing"
+SCRIPTDIR="$BASEDIR/scripts"
+TEMPDIR="$HOME/tempJJB"
+TEMPDIR="/media/localData/tempJJB"
+mkdir -p $TEMPDIR
+```
+
+# Get the simple names for each species and LRR/NLR/RLP
+
+```{sh}
+SPECIES="Stuberosum" 
+SPECIES="Osativa" 
+SPECIES="Zmays"
+
+# LRR
+fgrep "$SPECIES" $RESULTS/candsToArabidopsisSubgroup.csv | grep "LRR-XII,\|LRR-XI,\|LRR-III," | awk -F',' -v tempo=$TEMPDIR '{protein=$3; gsub("_.*","",$3); gsub("[ab]","",$2); print protein >tempo"/"$3"_"$2".simpleNames.txt"}'
+
+# RLP
+fgrep "$SPECIES" $RESULTS/candsToArabidopsisSubgroup_RLP.csv | grep "" | awk -F',' -v tempo=$TEMPDIR '{protein=$3; gsub("_.*","",$3); print protein >tempo"/"$3"_"$2".simpleNames.txt"}'
+zcat $RESULTS/fullSequences_RLP.fasta.gz | fgrep ">" | sed 's/>//g' | fgrep "$SPECIES" > $TEMPDIR/${SPECIES}_RLP.simpleNames.txt
+
+# NLR
+zcat $RESULTS/fullSequences_NLR.fasta.gz | fgrep ">" | sed 's/>//g' | fgrep "$SPECIES" > $TEMPDIR/${SPECIES}_NLR.simpleNames.txt
+zcat $RESULTS/nbArc_candidates.fasta.gz | fgrep ">" | sed 's/>//g' | fgrep "$SPECIES" > $TEMPDIR/${SPECIES}_NLRnoLRR.simpleNames.txt
+
+# for sampling, double checked, correct
+cat $TEMPDIR/$SPECIES*.simpleNames.txt | sort | uniq > $TEMPDIR/$SPECIES.toExcludeWhileSampling.txt
+cat $TEMPDIR/allProts.fasta | fgrep ">" | sed 's/>//g' | fgrep "$SPECIES" | fgrep -w -v -f $TEMPDIR/$SPECIES.toExcludeWhileSampling.txt > $TEMPDIR/$SPECIES.toIncludeWhileSampling.long.simpleNames.txt
+
+wc -l $TEMPDIR/$SPECIES*.simpleNames.txt
+```
+
+# Translate to original names
+
+```{sh}
+fgrep "$SPECIES" $TEMPDIR/allMaps.txt > $TEMPDIR/$SPECIES.nameTranslator.txt
+
+for CURFILE in $TEMPDIR/${SPECIES}*.simpleNames.txt; do
+PREFIX=$(basename $CURFILE .simpleNames.txt)
+awk '{print $0"|||"}' $CURFILE > ${CURFILE//.txt}.withSeparator.txt
+fgrep -f ${CURFILE//.txt}.withSeparator.txt $TEMPDIR/$SPECIES.nameTranslator.txt | awk -F'\\|\\|\\|' '{print $2}' > $TEMPDIR/$PREFIX.originalNames.txt
+NUMSIMPLE=$(cat $CURFILE | wc -l)
+NUMORIGIN=$(cat $TEMPDIR/$PREFIX.originalNames.txt | wc -l)
+if [ $NUMSIMPLE != $NUMORIGIN ]; then
+echo "$PREFIX: not matching, $NUMSIMPLE, $NUMORIGIN"
+fi
+done
+```
+
+# Get midpoints from GFF and split into the different groups
+
+```{sh}
+zcat $HELPERS/AnnotationFiles/$SPECIES*.gff3.gz | awk -v OFS='\t' '{if ($3=="mRNA") {print $1,$5-$4,$9}}' > $TEMPDIR/$SPECIES.mrnaPos.txt
+
+for CURFILE in $TEMPDIR/$SPECIES*.originalNames.txt; do
+PREFIX=$(basename $CURFILE .originalNames.txt)
+fgrep -f $CURFILE $TEMPDIR/$SPECIES.mrnaPos.txt | awk '{print $1","$2}' > $TEMPDIR/$PREFIX.mrnaPos.csv
+NUMSEARCHED=$(cat $CURFILE | wc -l)
+NUMFOUND=$(cat $TEMPDIR/$PREFIX.mrnaPos.csv | wc -l)
+if [ $NUMSEARCHED != $NUMFOUND ]; then
+echo "$PREFIX: not matching, $NUMSEARCHED, $NUMFOUND"
+fi
+done
+
+fgrep -f $CURFILE $TEMPDIR/$SPECIES.mrnaPos.txt | awk '{gsub("ID=","",$3); gsub(".v4.03;.*","",$3); print $3}' | sort | uniq > $TEMPDIR/found.txt
+sort $CURFILE | uniq > $TEMPDIR/all.txt
+comm -13 $TEMPDIR/found.txt $TEMPDIR/all.txt > $TEMPDIR/notFound.txt
+```
+
+# Test distances with a randomization test
+
+```{sh}
+#Rscript $SCRIPTDIR/distanceTest.R observedPositionA.csv observedPositionB.csv positionsToSampleAsB.csv outfilePrefix
+
+echo -e "set\tnumGenes\ttestDist\taverageSamplingDist\tdistRatio\tpValue" > $TEMPDIR/allTestMetrics.txt
+for SPECIES in Stuberosum Osativa Zmays; do
+REFERENCEFILE=$TEMPDIR/${SPECIES}_NLRnoLRR.mrnaPos.csv
+SAMPLINGFILE=$TEMPDIR/${SPECIES}.toIncludeWhileSampling.long.mrnaPos.csv
+Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_LRR-III.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.LRR-III.to.NLRnoLRR >> $TEMPDIR/allTestMetrics.txt
+Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_LRR-XII.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.LRR-XII.to.NLRnoLRR >> $TEMPDIR/allTestMetrics.txt
+Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_LRR-XI.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.LRR-XI.to.NLRnoLRR >> $TEMPDIR/allTestMetrics.txt
+Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_RLP.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.RLP.to.NLRnoLRR >> $TEMPDIR/allTestMetrics.txt
+#Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_bRLP.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.bRLP.to.NLRnoLRR >>
+#Rscript $SCRIPTDIR/distanceTest.R $REFERENCEFILE $TEMPDIR/${SPECIES}_prRLP.mrnaPos.csv $SAMPLINGFILE $TEMPDIR/test.$SPECIES.prRLP.to.NLRnoLRR >>
+done
+
+cp $TEMPDIR/allTestMetrics.txt $TESTING/
+cp $TEMPDIR/test*.pdf $TESTING/
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

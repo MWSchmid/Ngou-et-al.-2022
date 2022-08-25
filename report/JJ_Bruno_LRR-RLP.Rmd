@@ -1,0 +1,322 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+# Variables
+
+```{sh}
+BASEDIR="/media/mwschmid/myData/MWSchmid/JJ_Bruno"
+RESULTS="$BASEDIR/GitIgnore_results"
+HELPERS="$BASEDIR/GitIgnore_helpers"
+SCRIPTDIR="$BASEDIR/scripts"
+TEMPDIR="$HOME/tempJJB"
+TEMPDIR="/media/localData/tempJJB"
+mkdir -p $TEMPDIR
+```
+
+**C3-F domain for search from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1150382/, The Cf-9-like RLPs from Arabidopsis (Arabidopsis thaliana), ecotype Col-0, were identified as described in Tör et al. (2004), and used to construct an HMM for the Cf-RLP C3 region. Weird, Tör et al was retracted https://pubmed.ncbi.nlm.nih.gov/17284584/**
+
+**Maybe this: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3532234/; http://prgdb.crg.eu/wiki/Main_Page take Reference R-Genes, manually curated from all species**
+
+**No, this: https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-021-07855-0**
+
+# TMHMM
+
+```{sh}
+tar -xf tmhmm-2.0c.Linux.tar.gz
+sudo cp tmhmm-2.0c/bin/decodeanhmm.Linux_x86_64 /usr/local/bin/decodeanhmm
+sed -i 's+/usr/local/bin/perl+/usr/bin/perl+g' tmhmm-2.0c/bin/tmhmm
+sed -i 's+/usr/local/bin/perl+/usr/bin/perl+g' tmhmm-2.0c/bin/tmhmmformat.pl
+```
+
+# Dependencies, see other Rmd
+
+**see other**
+
+# Use NCBI to get a taxonomic tree (more cleanup in the script at the end)
+
+**see other**
+
+# Reorganize files to get decent names
+
+**see other**
+
+# Remove short isoforms (note, this also removes perfect duplicates of different lengths)
+
+**see other (usearch version)**
+
+
+# Remove short peptides and merge all files (most would work with >300 I think)
+
+```{sh}
+for CURFILE in $HELPERS/PrimarySequencesOnly/*.simple.fasta.gz; do 
+python $SCRIPTDIR/searchLongerProteins.py 250 $CURFILE
+done > $TEMPDIR/allProts.fasta
+fgrep ">" $TEMPDIR/allProts.fasta | wc -l
+
+fgrep ">" $TEMPDIR/allProts.fasta | sed 's/>//g' | awk -F'_' '{print $1}' | sort | uniq -c | awk 'BEGIN{print "species,genesSearched"}{print $2","$1}' > $RESULTS/RLP_numberOfGenesAtSearchBegin.csv
+```
+
+# Try to get C3-F region
+
+```{sh}
+echo -e ">RLP23frag\nPNLQVLTLRSNRFYGPISPPHQGPLGFPELRIFEISDNKFTGSLPPNYFVNWKASSRTMNQDGGLYMVYEEKLFDEGGYGYTDALDLQYKGLHMEQAKALTSYAAIDFSGNRLEGQIPESIGLLKALIAVNISNNAFTGHIPLSMANLENLESLDMSRNQLSGTIPNGLGSISFLAYINVSHNQLTGEIPQGTQITGQSKSSFEGNAGLCGLPLKESCFGTGAPPMYHQKQEDKEEEEEEEEEEEEVLNGRAVAIGYGSGLLLGLAIAQV" >> $HELPERS/reference_RLPs.fasta
+muscle -in $HELPERS/reference_RLPs.fasta -out $HELPERS/reference_RLPs.align
+# manual, KGQDYD is the end of C2, C3 should be after that (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1150382/), chop off and take what looks conserved
+# JJ says: 600 – 863 of Cf-9, I would begin the alignment at the Y in the attached screenshot from Fig 6B in the Fritz-Laylin
+# but 600-863 is very long
+cat $HELPERS/reference_RLPs_approx_C3_manualByMarc.align
+# careful, that's overwriting an edit
+#cp $HELPERS/reference_RLPs.align $HELPERS/reference_RLPs_approx_C3_manualByMarc.align
+#aliview $HELPERS/reference_RLPs_approx_C3_manualByMarc.align
+```
+
+## From the BMC paper https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-021-07855-0
+
+```{sh}
+sed 's/-//g' $HELPERS/beforeRevision/BMCpaper_Steidele/SupplementaryData/Aligment_muscle_full-length_RLPs.muscle > $TEMPDIR/arabidopsis_RLPs.fasta
+sed 's/-//g' $HELPERS/reference_RLPs_approx_C3_manualByMarc.align >> $TEMPDIR/arabidopsis_RLPs.fasta
+muscle -in $TEMPDIR/arabidopsis_RLPs.fasta -out $HELPERS/forC3search.align
+# careful, that's overwriting an edit
+#cp $HELPERS/forC3search.align $HELPERS/forC3search_manualByMarc.align
+#aliview $HELPERS/forC3search_manualByMarc.align
+hmmbuild $TEMPDIR/manualC3F.hmm $HELPERS/forC3search_manualByMarc.align
+
+# check Parameter
+sed 's/-//g' $HELPERS/beforeRevision/BMCpaper_Steidele/SupplementaryData/Aligment_muscle_full-length_RLPs.muscle > $TEMPDIR/arabidopsis_RLPs.fasta
+hmmsearch --tblout $TEMPDIR/C3Fcheck.hmm -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/arabidopsis_RLPs.fasta
+perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/C3Fcheck.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/C3Fcheck.txt
+wc -l $TEMPDIR/C3Fcheck.txt
+fgrep ">" $TEMPDIR/arabidopsis_RLPs.fasta | sort | uniq | wc -l
+# 54
+
+hmmsearch --domtblout $TEMPDIR/C3check.domtblout -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/arabidopsis_RLPs.fasta
+cat $TEMPDIR/C3check.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if(RefLen >= 100) print $1}' | sort | uniq | wc -l 
+# 53
+```
+
+# Use PFAM to search for LRR domain, custom C3F, and tmhmm for tm domains
+
+```{sh}
+hmmsearch --tblout $TEMPDIR/pkinase_candidates.hmm -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/allProts.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates.hmm -E 1e-3 --cpu 30 $CURHMM $TEMPDIR/allProts.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates.txt | sort | uniq > $TEMPDIR/allLRR_candidates.txt
+wc -l $TEMPDIR/allLRR_candidates.txt
+# 236876
+comm -12 $TEMPDIR/allLRR_candidates.txt $TEMPDIR/pkinase_candidates.txt | wc -l 
+comm -23 $TEMPDIR/allLRR_candidates.txt $TEMPDIR/pkinase_candidates.txt > $TEMPDIR/allLRR_candidates_noKinase.txt
+wc -l $TEMPDIR/allLRR_candidates_noKinase.txt
+# 149551
+
+# extract all LRR candidates
+samtools faidx $TEMPDIR/allProts.fasta -r $TEMPDIR/allLRR_candidates_noKinase.txt > $TEMPDIR/allLRR_candidates_noKinase.fasta
+
+# search for C3F, require a match of at least 140 AA
+hmmsearch --domtblout $TEMPDIR/allLRR_candidates_C3F.domtblout -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/allLRR_candidates_noKinase.fasta
+cat $TEMPDIR/allLRR_candidates_C3F.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if(RefLen >= 100) print $1}' | sort | uniq > $TEMPDIR/allLRR_candidatesWithC3F.txt
+samtools faidx $TEMPDIR/allLRR_candidates_noKinase.fasta -r $TEMPDIR/allLRR_candidatesWithC3F.txt > $TEMPDIR/allLRR_candidatesWithC3F.fasta
+fgrep ">" $TEMPDIR/allLRR_candidatesWithC3F.fasta | wc -l
+# 35437
+
+# tmhmm
+export PATH="$PATH:$HOME/tmhmm-2.0c/bin"
+tmhmm $TEMPDIR/allLRR_candidatesWithC3F.fasta > $TEMPDIR/tmhmm.res
+python $SCRIPTDIR/extractTMproteins.py 0 $TEMPDIR/tmhmm.res $TEMPDIR/allLRR_candidatesWithC3F.fasta $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta
+fgrep ">" $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta | wc -l
+# found 26585 peptides.
+
+#### Same with 150aa
+
+hmmsearch --tblout $TEMPDIR/pkinase_candidates_150.hmm -E 1e-10 --cpu 30 $TEMPDIR/pkinase.hmm $TEMPDIR/allProts_150.fasta
+for CURHMM in $TEMPDIR/lrr*.hmm; do
+if [[ $CURHMM =~ "candidates" ]]; then
+echo "skipping $CURHMM"
+continue
+fi
+PREFIX=$(basename $CURHMM .hmm)
+hmmsearch --tblout $TEMPDIR/${PREFIX}_candidates_150.hmm -E 1e-3 --cpu 30 $CURHMM $TEMPDIR/allProts_150.fasta
+done
+
+for CURCAND in $TEMPDIR/*_candidates_150.hmm; do
+perl $SCRIPTDIR/hmmParser.pl $CURCAND | awk '{print $1}' | sort | uniq > ${CURCAND//.hmm}.txt
+done
+
+cat $TEMPDIR/lrr_*_candidates_150.txt | sort | uniq > $TEMPDIR/allLRR_candidates_150.txt
+wc -l $TEMPDIR/allLRR_candidates_150.txt
+# 246720
+comm -12 $TEMPDIR/allLRR_candidates_150.txt $TEMPDIR/pkinase_candidates_150.txt | wc -l 
+comm -23 $TEMPDIR/allLRR_candidates_150.txt $TEMPDIR/pkinase_candidates_150.txt > $TEMPDIR/allLRR_candidates_noKinase_150.txt
+wc -l $TEMPDIR/allLRR_candidates_noKinase_150.txt
+# 159710
+
+# extract all LRR candidates
+samtools faidx $TEMPDIR/allProts_150.fasta -r $TEMPDIR/allLRR_candidates_noKinase_150.txt > $TEMPDIR/allLRR_candidates_noKinase_150.fasta
+
+# search for C3F, require a match of at least 140 AA
+hmmsearch --domtblout $TEMPDIR/allLRR_candidates_C3F_150.domtblout -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/allLRR_candidates_noKinase_150.fasta
+cat $TEMPDIR/allLRR_candidates_C3F_150.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if(RefLen >= 100) print $1}' | sort | uniq > $TEMPDIR/allLRR_candidatesWithC3F_150.txt
+samtools faidx $TEMPDIR/allLRR_candidates_noKinase_150.fasta -r $TEMPDIR/allLRR_candidatesWithC3F_150.txt > $TEMPDIR/allLRR_candidatesWithC3F_150.fasta
+fgrep ">" $TEMPDIR/allLRR_candidatesWithC3F_150.fasta | wc -l
+# 37802 instead of 35437
+
+# tmhmm
+export PATH="$PATH:$HOME/tmhmm-2.0c/bin"
+tmhmm $TEMPDIR/allLRR_candidatesWithC3F_150.fasta > $TEMPDIR/tmhmm.res
+python $SCRIPTDIR/extractTMproteins.py 0 $TEMPDIR/tmhmm.res $TEMPDIR/allLRR_candidatesWithC3F_150.fasta $TEMPDIR/allLRR_candidatesWithC3FandTM_150.fasta
+fgrep ">" $TEMPDIR/allLRR_candidatesWithC3FandTM_150.fasta | wc -l
+# 27691 instead of 26585
+```
+
+# Extract C3-F regions
+
+```{sh}
+# hmm again
+hmmsearch --domtblout $TEMPDIR/allLRR_candidatesWithTM_C3F.domtblout -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta
+
+# HERE I AM
+
+# NO filter criteria at least 140/200 of the reference need to be present)
+cat $TEMPDIR/allLRR_candidatesWithTM_C3F.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if(RefLen >= 100) print $1, $18, $19, $14}' > $TEMPDIR/C3FPosition.bed
+
+# filter for highest score
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/C3FPosition.bed > $TEMPDIR/uniqueC3FPosition.bed
+gzip -c $TEMPDIR/uniqueC3FPosition.bed > $RESULTS/uniqueC3FPosition.bed.gz
+
+# extract domains
+bedtools getfasta -fi $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta -bed $TEMPDIR/uniqueC3FPosition.bed > $TEMPDIR/C3Fsequence.fasta
+fgrep ">" $TEMPDIR/C3Fsequence.fasta | wc -l
+# 26585
+
+# hmm again
+hmmsearch --domtblout $TEMPDIR/allLRR_candidatesWithTM_C3F_150.domtblout -E 1e-10 --cpu 30 $TEMPDIR/manualC3F.hmm $TEMPDIR/allLRR_candidatesWithC3FandTM_150.fasta
+
+# NO filter criteria at least 140/200 of the reference need to be present)
+cat $TEMPDIR/allLRR_candidatesWithTM_C3F_150.domtblout | fgrep -v '#' | awk 'OFS="\t" {RefLen=$17-$16; if(RefLen >= 100) print $1, $18, $19, $14}' > $TEMPDIR/C3FPosition_150.bed
+
+# filter for highest score
+Rscript $SCRIPTDIR/Selecto.R $TEMPDIR/C3FPosition_150.bed > $TEMPDIR/uniqueC3FPosition_150.bed
+gzip -c $TEMPDIR/uniqueC3FPosition_150.bed > $RESULTS/uniqueC3FPosition_150.bed.gz
+
+# extract domains
+bedtools getfasta -fi $TEMPDIR/allLRR_candidatesWithC3FandTM_150.fasta -bed $TEMPDIR/uniqueC3FPosition_150.bed > $TEMPDIR/C3Fsequence_150.fasta
+fgrep ">" $TEMPDIR/C3Fsequence_150.fasta | wc -l
+# 27691 instead of 26585
+```
+
+# Check which group matches 
+
+```{sh}
+# check if typed correctly
+sed 's/-//g' $HELPERS/beforeRevision/BMCpaper_Steidele/SupplementaryData/Aligment_muscle_full-length_RLPs.muscle > $TEMPDIR/arabidopsis_RLPs.fasta
+fgrep -f $HELPERS/beforeRevision/BMCpaper_Steidele/bRLPs.txt $TEMPDIR/arabidopsis_RLPs.fasta | sed 's/>//g' | awk '{print $1}' > $TEMPDIR/doubleCheck.txt
+cat $HELPERS/beforeRevision/BMCpaper_Steidele/bRLPs.txt $TEMPDIR/doubleCheck.txt | sort | uniq -u
+fgrep ">" $TEMPDIR/arabidopsis_RLPs.fasta | sed 's/>//g' | awk '{print $1}' > $TEMPDIR/allAtRLPs.txt
+cat $TEMPDIR/allAtRLPs.txt $HELPERS/beforeRevision/BMCpaper_Steidele/bRLPs.txt | sort | uniq -u > $HELPERS/beforeRevision/BMCpaper_Steidele/prRLPs.txt
+
+# extract
+samtools faidx $TEMPDIR/arabidopsis_RLPs.fasta -r $HELPERS/beforeRevision/BMCpaper_Steidele/bRLPs.txt | sed 's/>/>at_sg_bRLP__/g' > $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta
+samtools faidx $TEMPDIR/arabidopsis_RLPs.fasta -r $HELPERS/beforeRevision/BMCpaper_Steidele/prRLPs.txt | sed 's/>/>at_sg_prRLP__/g' >> $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta
+fgrep ">" $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta | wc -l 
+# 54
+
+diamond makedb -p 30 --in $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta -d $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta
+diamond blastp -p 30 -q $TEMPDIR/C3Fsequence.fasta -d $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta -o $TEMPDIR/candsToArabidopsisBlast_RLP.tsv -e 1e-10 -k 300
+gzip -f $TEMPDIR/candsToArabidopsisBlast_RLP.tsv
+Rscript $SCRIPTDIR/assignCandidatesToSubgroups.R $TEMPDIR/candsToArabidopsisBlast_RLP.tsv.gz $TEMPDIR/candsToArabidopsisSubgroup_RLP.csv
+cp $TEMPDIR/candsToArabidopsisBlast_RLP.tsv.gz $RESULTS/
+cp $TEMPDIR/candsToArabidopsisSubgroup_RLP.csv $RESULTS/
+fgrep ">" $TEMPDIR/C3Fsequence.fasta | sed 's/>//g' | cut -d_ -f 1 | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/RLP_totalCounts.csv
+
+diamond makedb -p 30 --in $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta -d $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta
+diamond blastp -p 30 -q $TEMPDIR/C3Fsequence_150.fasta -d $TEMPDIR/arabidopsis_RLPs_withPrefix.fasta -o $TEMPDIR/candsToArabidopsisBlast_RLP_150.tsv -e 1e-10 -k 300
+gzip -f $TEMPDIR/candsToArabidopsisBlast_RLP_150.tsv
+Rscript $SCRIPTDIR/assignCandidatesToSubgroups.R $TEMPDIR/candsToArabidopsisBlast_RLP_150.tsv.gz $TEMPDIR/candsToArabidopsisSubgroup_RLP_150.csv
+cp $TEMPDIR/candsToArabidopsisBlast_RLP_150.tsv.gz $RESULTS/
+cp $TEMPDIR/candsToArabidopsisSubgroup_RLP_150.csv $RESULTS/
+fgrep ">" $TEMPDIR/C3Fsequence_150.fasta | sed 's/>//g' | cut -d_ -f 1 | sort | uniq -c | awk 'BEGIN{print "species,count"}{print $2","$1}' > $RESULTS/RLP_totalCounts_150.csv
+```
+
+# Just count species
+
+```{r}
+source("/media/mwschmid/myData/MWSchmid/Development/R/RNAseqWrapper.R")
+source("/media/mwschmid/myData/MWSchmid/Development/R/RNAseqWrapperAds.R")
+source("/media/mwschmid/myData/MWSchmid/Development/R/RNAseqWrapper_overviewBandwidthFix.R")
+myData <- read.csv("/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/candsToArabidopsisSubgroup_RLP.csv", header = TRUE, stringsAsFactors = FALSE)
+myDataTotal <- read.csv("/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/RLP_totalCounts.csv", header = TRUE, stringsAsFactors = FALSE)
+myData$species <- sapply(myData$candidateNameOnly, function(x) unlist(strsplit(x, '_'))[1])
+count <- rep(1, nrow(myData))
+out <- aggregate(count, by = list(species = myData$species, group = myData$subgroup), sum)
+out <- f.long.to.wide(out, "species", "group", "x")
+out[is.na(out)] <- 0
+#out$count <- rowSums(out) # chose count as total because of the lines in the correlation test (but use the real number, not just assigned to Arabidopsis)
+out$count <- 0
+out[myDataTotal$species, "count"] <- myDataTotal$count
+colSums(out)
+write.csv(out, "/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/LRR_RLP_candidates_per_species.csv")
+myData <- read.csv("/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/candsToArabidopsisSubgroup_RLP_150.csv", header = TRUE, stringsAsFactors = FALSE)
+myDataTotal <- read.csv("/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/RLP_totalCounts_150.csv", header = TRUE, stringsAsFactors = FALSE)
+myData$species <- sapply(myData$candidateNameOnly, function(x) unlist(strsplit(x, '_'))[1])
+count <- rep(1, nrow(myData))
+out <- aggregate(count, by = list(species = myData$species, group = myData$subgroup), sum)
+out <- f.long.to.wide(out, "species", "group", "x")
+out[is.na(out)] <- 0
+#out$count <- rowSums(out) # chose count as total because of the lines in the correlation test (but use the real number, not just assigned to Arabidopsis)
+out[myDataTotal$species, "count"] <- myDataTotal$count
+colSums(out)
+write.csv(out, "/media/mwschmid/myData/MWSchmid/JJ_Bruno/GitIgnore_results/LRR_RLP_candidates_per_species_150.csv")
+```
+
+```{sh}
+gzip -c $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta > $RESULTS/fullSequences_RLP.fasta.gz
+zcat $RESULTS/fullSequences_RLP.fasta.gz | fgrep ">" | wc -l
+# 26585 (200 more than in the table - because not all are assigned, I added them in the anyRLP)
+gzip -c $TEMPDIR/allLRR_candidatesWithC3FandTM_150.fasta > $RESULTS/fullSequences_RLP_150.fasta.gz
+zcat $RESULTS/fullSequences_RLP_150.fasta.gz | fgrep ">" | wc -l
+# 27691
+```
+
+# Extract the ones with/without LysM domain, not a single candidate!?! Yes, that's correct :D
+
+```{sh}
+hmmsearch --tblout $TEMPDIR/LysM_candidates.hmm --max -E 1000 --incE 1000 --incdomE 1000 --cpu 30 $TEMPDIR/LysM.hmm $TEMPDIR/allProts.fasta
+perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/LysM_candidates.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/LysM_candidates.txt
+wc -l $TEMPDIR/LysM_candidates.txt
+# 9182 (out of 7672052 in total)
+fgrep ">" $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta | sed 's/>//g' | sort | uniq > $TEMPDIR/RLP_all_candidates.txt
+comm -12 $TEMPDIR/RLP_all_candidates.txt $TEMPDIR/LysM_candidates.txt > $TEMPDIR/RLP_LysM_candidates.txt
+comm -23 $TEMPDIR/RLP_all_candidates.txt $TEMPDIR/LysM_candidates.txt > $TEMPDIR/RLP_noLysM_candidates.txt
+wc -l $TEMPDIR/RLP_all_candidates.txt
+wc -l $TEMPDIR/RLP_LysM_candidates.txt
+wc -l $TEMPDIR/RLP_noLysM_candidates.txt
+
+# one LysM RLP candidate!
+
+#hmmsearch --tblout $TEMPDIR/RLP_LysM.hmm -E 0.01 --cpu 30 $TEMPDIR/LysM.hmm $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta
+#perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/RLP_LysM.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/RLP_LysM_candidates.txt
+#hmmsearch --tblout $TEMPDIR/RLP_LysM.hmm -E 10 --cpu 30 $TEMPDIR/LysM.hmm $TEMPDIR/allLRR_candidatesWithC3FandTM.fasta
+#perl $SCRIPTDIR/hmmParser.pl $TEMPDIR/RLP_LysM.hmm | awk '{print $1}' | sort | uniq > $TEMPDIR/RLP_LysM_candidates.txt
+#wc -l $TEMPDIR/RLP_LysM_candidates.txt
+```
+
+# Get ID to subgroup
+
+```{sh}
+awk -F',' '{print $3","$2}' $RESULTS/candsToArabidopsisSubgroup_RLP.csv > $RESULTS/RLP.idToSubgroup.txt
+awk -F',' '{print $3","$2}' $RESULTS/candsToArabidopsisSubgroup_RLP_150.csv > $RESULTS/RLP_150.idToSubgroup.txt
+```
+
+
+
+
+
+
